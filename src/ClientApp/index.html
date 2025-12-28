@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net;">
+    <title>Remote View Client</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 450px;
+        }
+        .code-input {
+            font-size: 1.5rem;
+            letter-spacing: 0.3rem;
+            text-transform: uppercase;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-connected { background-color: #28a745; }
+        .status-waiting { background-color: #ffc107; animation: pulse 1.5s infinite; }
+        .status-error { background-color: #dc3545; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            border: none;
+        }
+        .log-area {
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container p-3">
+        <div class="card">
+            <div class="card-body p-4">
+                <div class="text-center mb-3">
+                    <i class="bi bi-display fs-1 text-success"></i>
+                    <h4 class="mt-2">Remote View Client</h4>
+                </div>
+
+                <!-- Connection Form -->
+                <div id="connectionForm">
+                    <div class="mb-3">
+                        <label for="serverUrl" class="form-label fw-bold">
+                            <i class="bi bi-globe me-1"></i>Server URL
+                        </label>
+                        <input type="url" class="form-control" id="serverUrl" 
+                               placeholder="http://localhost:5000" value="http://localhost:5000">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="codeInput" class="form-label fw-bold">
+                            <i class="bi bi-key me-1"></i>Session Code
+                        </label>
+                        <input type="text" class="form-control code-input" id="codeInput" 
+                               maxlength="5" placeholder="XXXXX" autocomplete="off">
+                    </div>
+
+                    <div class="d-grid">
+                        <button id="btnConnect" class="btn btn-success btn-lg">
+                            <i class="bi bi-link-45deg me-1"></i>Connect
+                        </button>
+                    </div>
+
+                    <div id="errorAlert" class="alert alert-danger mt-3 d-none">
+                        <i class="bi bi-exclamation-circle me-1"></i>
+                        <span id="errorMessage"></span>
+                    </div>
+                </div>
+
+                <!-- Connected State -->
+                <div id="connectedState" class="d-none">
+                    <div class="alert alert-success mb-3">
+                        <span class="status-indicator status-connected"></span>
+                        Connected to session: <strong id="sessionCodeDisplay"></strong>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-journal-text me-1"></i>Activity Log
+                        </label>
+                        <div id="logArea" class="log-area p-2">
+                            <div class="text-muted">Waiting for commands...</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button id="btnToggleFullscreen" class="btn btn-outline-secondary flex-fill">
+                            <i class="bi bi-fullscreen me-1"></i>Toggle Fullscreen
+                        </button>
+                        <button id="btnDisconnect" class="btn btn-danger">
+                            <i class="bi bi-x-circle me-1"></i>Disconnect
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Reconnecting State -->
+                <div id="reconnectingState" class="d-none">
+                    <div class="alert alert-warning">
+                        <div class="spinner-border spinner-border-sm me-2"></div>
+                        Reconnecting to server...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const serverUrlInput = document.getElementById('serverUrl');
+        const codeInput = document.getElementById('codeInput');
+        const btnConnect = document.getElementById('btnConnect');
+        const btnDisconnect = document.getElementById('btnDisconnect');
+        const btnToggleFullscreen = document.getElementById('btnToggleFullscreen');
+        const connectionForm = document.getElementById('connectionForm');
+        const connectedState = document.getElementById('connectedState');
+        const reconnectingState = document.getElementById('reconnectingState');
+        const errorAlert = document.getElementById('errorAlert');
+        const errorMessage = document.getElementById('errorMessage');
+        const sessionCodeDisplay = document.getElementById('sessionCodeDisplay');
+        const logArea = document.getElementById('logArea');
+
+        // Load saved server URL
+        const savedUrl = localStorage.getItem('serverUrl');
+        if (savedUrl) serverUrlInput.value = savedUrl;
+
+        function addLog(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const colorClass = type === 'error' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-muted';
+            logArea.innerHTML += `<div class="${colorClass}"><small>[${time}]</small> ${message}</div>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorAlert.classList.remove('d-none');
+        }
+
+        function hideError() {
+            errorAlert.classList.add('d-none');
+        }
+
+        // Auto-uppercase code input
+        codeInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        // Connect button
+        btnConnect.addEventListener('click', async () => {
+            const url = serverUrlInput.value.trim();
+            const code = codeInput.value.trim();
+
+            if (!url) {
+                showError('Please enter the server URL');
+                return;
+            }
+            if (code.length !== 5) {
+                showError('Please enter a valid 5-character code');
+                return;
+            }
+
+            hideError();
+            btnConnect.disabled = true;
+            btnConnect.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Connecting...';
+
+            localStorage.setItem('serverUrl', url);
+            await window.electronAPI.connect(url, code);
+        });
+
+        // Disconnect button
+        btnDisconnect.addEventListener('click', async () => {
+            await window.electronAPI.disconnect();
+            connectedState.classList.add('d-none');
+            connectionForm.classList.remove('d-none');
+            logArea.innerHTML = '<div class="text-muted">Waiting for commands...</div>';
+        });
+
+        // Toggle fullscreen
+        btnToggleFullscreen.addEventListener('click', () => {
+            window.electronAPI.toggleFullscreen();
+        });
+
+        // Event handlers
+        window.electronAPI.onConnected((code) => {
+            btnConnect.disabled = false;
+            btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
+            connectionForm.classList.add('d-none');
+            connectedState.classList.remove('d-none');
+            sessionCodeDisplay.textContent = code;
+            addLog('Connected to session', 'success');
+        });
+
+        window.electronAPI.onConnectionError((error) => {
+            btnConnect.disabled = false;
+            btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
+            showError(error);
+        });
+
+        window.electronAPI.onUrlReceived((url) => {
+            addLog(`URL loaded: ${url}`, 'success');
+        });
+
+        window.electronAPI.onScriptExecuted((result) => {
+            if (result.success) {
+                addLog('Script executed successfully', 'success');
+            } else {
+                addLog(`Script error: ${result.error}`, 'error');
+            }
+        });
+
+        window.electronAPI.onServerDisconnected(() => {
+            addLog('Server disconnected', 'error');
+        });
+
+        window.electronAPI.onReconnecting(() => {
+            connectedState.classList.add('d-none');
+            reconnectingState.classList.remove('d-none');
+            addLog('Reconnecting...', 'info');
+        });
+
+        window.electronAPI.onReconnected(() => {
+            reconnectingState.classList.add('d-none');
+            connectedState.classList.remove('d-none');
+            addLog('Reconnected', 'success');
+        });
+
+        window.electronAPI.onConnectionClosed(() => {
+            connectedState.classList.add('d-none');
+            reconnectingState.classList.add('d-none');
+            connectionForm.classList.remove('d-none');
+            btnConnect.disabled = false;
+            btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
+        });
+
+        // Enter key to connect
+        codeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') btnConnect.click();
+        });
+    </script>
+</body>
+</html>

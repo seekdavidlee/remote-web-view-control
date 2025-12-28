@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote View Control - Server</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .code-display {
+            font-size: 3rem;
+            font-weight: bold;
+            letter-spacing: 0.5rem;
+            color: #667eea;
+            font-family: 'Courier New', monospace;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-waiting {
+            background-color: #ffc107;
+            animation: pulse 1.5s infinite;
+        }
+        .status-connected {
+            background-color: #28a745;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <i class="bi bi-display fs-1 text-primary"></i>
+                            <h2 class="mt-2">Server Control Panel</h2>
+                        </div>
+
+                        <!-- Initial State - Getting Code -->
+                        <div id="initialState" class="text-center">
+                            <button id="btnGetCode" class="btn btn-primary btn-lg px-5">
+                                <i class="bi bi-key me-2"></i>Generate Session Code
+                            </button>
+                        </div>
+
+                        <!-- Code Display State -->
+                        <div id="codeState" class="d-none">
+                            <div class="text-center mb-4">
+                                <p class="text-muted mb-2">Share this code with the client:</p>
+                                <div class="code-display p-3 bg-light rounded" id="sessionCode"></div>
+                                <button id="btnCopyCode" class="btn btn-outline-secondary btn-sm mt-2">
+                                    <i class="bi bi-clipboard me-1"></i>Copy Code
+                                </button>
+                            </div>
+                            
+                            <div class="alert alert-info" id="waitingAlert">
+                                <span class="status-indicator status-waiting"></span>
+                                Waiting for client to connect...
+                            </div>
+                        </div>
+
+                        <!-- Connected State -->
+                        <div id="connectedState" class="d-none">
+                            <div class="alert alert-success mb-4">
+                                <span class="status-indicator status-connected"></span>
+                                <strong>Client Connected!</strong>
+                            </div>
+
+                            <!-- URL Section -->
+                            <div class="mb-4">
+                                <label for="urlInput" class="form-label fw-bold">
+                                    <i class="bi bi-link-45deg me-1"></i>Send URL:
+                                </label>
+                                <div class="input-group">
+                                    <input type="url" class="form-control" id="urlInput" 
+                                           placeholder="https://example.com" 
+                                           value="https://www.example.com">
+                                    <button class="btn btn-primary" type="button" id="btnSendUrl">
+                                        <i class="bi bi-send me-1"></i>Send
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Script Section -->
+                            <div class="mb-3">
+                                <label for="scriptInput" class="form-label fw-bold">
+                                    <i class="bi bi-code-slash me-1"></i>Execute JavaScript:
+                                </label>
+                                <textarea class="form-control font-monospace" id="scriptInput" rows="3" 
+                                          placeholder="document.body.style.zoom = '150%'"></textarea>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <div class="form-text">Run custom JavaScript on the client display.</div>
+                                    <button class="btn btn-warning btn-sm" type="button" id="btnExecuteScript">
+                                        <i class="bi bi-play-fill me-1"></i>Execute
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Quick Actions -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-lightning me-1"></i>Quick Actions:
+                                </label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button class="btn btn-outline-secondary btn-sm quick-script" 
+                                            data-script="document.body.style.zoom = '150%'">Zoom 150%</button>
+                                    <button class="btn btn-outline-secondary btn-sm quick-script" 
+                                            data-script="document.body.style.zoom = '100%'">Zoom 100%</button>
+                                    <button class="btn btn-outline-secondary btn-sm quick-script" 
+                                            data-script="document.documentElement.requestFullscreen()">Fullscreen</button>
+                                    <button class="btn btn-outline-secondary btn-sm quick-script" 
+                                            data-script="window.scrollTo(0, 0)">Scroll Top</button>
+                                    <button class="btn btn-outline-secondary btn-sm quick-script" 
+                                            data-script="window.scrollTo(0, document.body.scrollHeight)">Scroll Bottom</button>
+                                </div>
+                            </div>
+
+                            <div id="actionConfirmation" class="alert alert-success d-none">
+                                <i class="bi bi-check-circle me-1"></i>
+                                <span id="confirmationMessage">Action completed!</span>
+                            </div>
+                        </div>
+
+                        <!-- Disconnected State -->
+                        <div id="disconnectedState" class="d-none">
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Client disconnected. Waiting for reconnection...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        let connection = null;
+        let sessionCode = '';
+
+        document.getElementById('btnGetCode').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/session/create', { method: 'POST' });
+                const data = await response.json();
+                sessionCode = data.code;
+                
+                document.getElementById('sessionCode').textContent = sessionCode;
+                document.getElementById('initialState').classList.add('d-none');
+                document.getElementById('codeState').classList.remove('d-none');
+                
+                await connectToHub();
+            } catch (error) {
+                console.error('Error creating session:', error);
+                alert('Failed to create session. Please try again.');
+            }
+        });
+
+        document.getElementById('btnCopyCode').addEventListener('click', () => {
+            navigator.clipboard.writeText(sessionCode);
+            const btn = document.getElementById('btnCopyCode');
+            btn.innerHTML = '<i class="bi bi-check me-1"></i>Copied!';
+            setTimeout(() => {
+                btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Code';
+            }, 2000);
+        });
+
+        document.getElementById('btnSendUrl').addEventListener('click', sendUrl);
+        document.getElementById('btnExecuteScript').addEventListener('click', executeScript);
+        
+        document.getElementById('urlInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendUrl();
+        });
+
+        // Quick script buttons
+        document.querySelectorAll('.quick-script').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const script = btn.dataset.script;
+                try {
+                    await connection.invoke('ExecuteScriptOnClient', sessionCode, script);
+                    showConfirmation('Script executed!');
+                } catch (error) {
+                    console.error('Error executing script:', error);
+                    alert('Failed to execute script.');
+                }
+            });
+        });
+
+        function showConfirmation(message) {
+            const confirmation = document.getElementById('actionConfirmation');
+            document.getElementById('confirmationMessage').textContent = message;
+            confirmation.classList.remove('d-none');
+            setTimeout(() => confirmation.classList.add('d-none'), 3000);
+        }
+
+        async function sendUrl() {
+            const url = document.getElementById('urlInput').value.trim();
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
+
+            try {
+                await connection.invoke('SendUrlToClient', sessionCode, url);
+                showConfirmation('URL sent successfully!');
+            } catch (error) {
+                console.error('Error sending URL:', error);
+                alert('Failed to send URL. Please try again.');
+            }
+        }
+
+        async function executeScript() {
+            const script = document.getElementById('scriptInput').value.trim();
+            if (!script) {
+                alert('Please enter a script');
+                return;
+            }
+
+            try {
+                await connection.invoke('ExecuteScriptOnClient', sessionCode, script);
+                showConfirmation('Script executed!');
+            } catch (error) {
+                console.error('Error executing script:', error);
+                alert('Failed to execute script. Please try again.');
+            }
+        }
+
+        async function connectToHub() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl('/hub/remoteview')
+                .withAutomaticReconnect()
+                .build();
+
+            connection.on('ClientConnected', () => {
+                document.getElementById('waitingAlert').classList.add('d-none');
+                document.getElementById('connectedState').classList.remove('d-none');
+                document.getElementById('disconnectedState').classList.add('d-none');
+            });
+
+            connection.on('ClientDisconnected', () => {
+                document.getElementById('connectedState').classList.add('d-none');
+                document.getElementById('disconnectedState').classList.remove('d-none');
+            });
+
+            try {
+                await connection.start();
+                const success = await connection.invoke('ServerJoinSession', sessionCode);
+                if (!success) {
+                    alert('Failed to join session. Invalid code.');
+                }
+            } catch (error) {
+                console.error('Error connecting to hub:', error);
+                alert('Failed to connect. Please refresh and try again.');
+            }
+        }
+    </script>
+</body>
+</html>
