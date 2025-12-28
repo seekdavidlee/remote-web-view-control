@@ -256,8 +256,13 @@
 
         async function connectToHub() {
             connection = new signalR.HubConnectionBuilder()
-                .withUrl('/hub/remoteview')
+                .withUrl('/hub/remoteview', {
+                    transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling,
+                    skipNegotiation: false,
+                    timeout: 60000
+                })
                 .withAutomaticReconnect()
+                .configureLogging(signalR.LogLevel.Information)
                 .build();
 
             connection.on('ClientConnected', () => {
