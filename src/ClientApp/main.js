@@ -118,7 +118,8 @@ async function connectToServer(url, code) {
                 },
                 // Use transport fallbacks for better compatibility on Raspberry Pi
                 transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling,
-                skipNegotiation: false // Ensure proper transport negotiation
+                skipNegotiation: false, // Ensure proper transport negotiation
+                withCredentials: false // Don't send credentials (helps with CORS)
             })
             .withAutomaticReconnect({
                 nextRetryDelayInMilliseconds: retryContext => {
