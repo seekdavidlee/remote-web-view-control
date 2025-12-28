@@ -10,6 +10,7 @@ builder.Services.AddSingleton<SessionService>();
 var app = builder.Build();
 
 // Configure middleware
+app.UseWebSockets(); // Enable WebSockets support
 app.UseDefaultFiles();
 app.UseStaticFiles();
 

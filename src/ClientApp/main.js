@@ -115,7 +115,10 @@ async function connectToServer(url, code) {
                 timeout: 60000, // 60 seconds timeout (increased for slower devices)
                 headers: {
                     'User-Agent': 'ElectronClient/1.0'
-                }
+                },
+                // Use transport fallbacks for better compatibility on Raspberry Pi
+                transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling,
+                skipNegotiation: false // Ensure proper transport negotiation
             })
             .withAutomaticReconnect({
                 nextRetryDelayInMilliseconds: retryContext => {
