@@ -140,6 +140,10 @@
                                             data-script="window.scrollTo(0, 0)">Scroll Top</button>
                                     <button class="btn btn-outline-secondary btn-sm quick-script" 
                                             data-script="window.scrollTo(0, document.body.scrollHeight)">Scroll Bottom</button>
+                                    <button class="btn btn-outline-secondary btn-sm" id="btnSimulateClick">
+                                        <i class="bi bi-mouse me-1"></i>Simulate Click</button>
+                                    <button class="btn btn-outline-info btn-sm" id="btnViewLogs">
+                                        <i class="bi bi-file-text me-1"></i>View Logs <span class="badge bg-secondary" id="logCount">0</span></button>
                                 </div>
                             </div>
 
@@ -157,6 +161,72 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div class="modal fade" id="logsModal" tabindex="-1" aria-labelledby="logsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="logsModalLabel">
+                        <i class="bi bi-file-text me-2"></i>Client Logs
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="autoScrollLogs" checked>
+                            <label class="form-check-label" for="autoScrollLogs">
+                                Auto-scroll to bottom
+                            </label>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" id="btnClearLogs">
+                            <i class="bi bi-trash me-1"></i>Clear Logs
+                        </button>
+                    </div>
+                    <div id="logsContainer" class="border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.85rem;">
+                        <div class="text-muted text-center">No logs yet...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mouse Click Modal -->
+    <div class="modal fade" id="mouseClickModal" tabindex="-1" aria-labelledby="mouseClickModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="mouseClickModalLabel">
+                        <i class="bi bi-mouse me-2"></i>Simulate Mouse Click
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="clickX" class="form-label">X Coordinate:</label>
+                        <input type="number" class="form-control" id="clickX" placeholder="e.g., 100" value="100" min="0">
+                    </div>
+                    <div class="mb-3">
+                        <label for="clickY" class="form-label">Y Coordinate:</label>
+                        <input type="number" class="form-control" id="clickY" placeholder="e.g., 100" value="100" min="0">
+                    </div>
+                    <div class="form-text">
+                        <i class="bi bi-info-circle me-1"></i>Coordinates are relative to the display window (top-left is 0,0)
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="btnSendClick">
+                        <i class="bi bi-send me-1"></i>Send Click
+                    </button>
                 </div>
             </div>
         </div>
@@ -214,6 +284,100 @@
                 }
             });
         });
+
+        // Mouse click simulation
+        let mouseClickModal = null;
+        document.getElementById('btnSimulateClick').addEventListener('click', () => {
+            if (!mouseClickModal) {
+                mouseClickModal = new bootstrap.Modal(document.getElementById('mouseClickModal'));
+            }
+            mouseClickModal.show();
+        });
+
+        document.getElementById('btnSendClick').addEventListener('click', async () => {
+            const x = parseInt(document.getElementById('clickX').value);
+            const y = parseInt(document.getElementById('clickY').value);
+            
+            if (isNaN(x) || isNaN(y) || x < 0 || y < 0) {
+                alert('Please enter valid coordinates (positive numbers)');
+                return;
+            }
+
+            try {
+                await connection.invoke('SimulateMouseClick', sessionCode, x, y);
+                mouseClickModal.hide();
+                showConfirmation(`Mouse click sent at (${x}, ${y})`);
+            } catch (error) {
+                console.error('Error sending mouse click:', error);
+                alert('Failed to send mouse click.');
+            }
+        });
+
+        // Allow Enter key to submit in modal
+        document.getElementById('mouseClickModal').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('btnSendClick').click();
+            }
+        });
+
+        // Logs functionality
+        let logsModal = null;
+        let logMessages = [];
+        
+        document.getElementById('btnViewLogs').addEventListener('click', () => {
+            if (!logsModal) {
+                logsModal = new bootstrap.Modal(document.getElementById('logsModal'));
+            }
+            logsModal.show();
+        });
+
+        document.getElementById('btnClearLogs').addEventListener('click', () => {
+            logMessages = [];
+            document.getElementById('logsContainer').innerHTML = '<div class="text-muted text-center">No logs yet...</div>';
+            document.getElementById('logCount').textContent = '0';
+        });
+
+        function addLogMessage(level, message, timestamp) {
+            const logEntry = { level, message, timestamp: new Date(timestamp) };
+            logMessages.push(logEntry);
+            
+            // Update log count badge
+            document.getElementById('logCount').textContent = logMessages.length;
+            
+            // Format and add to container
+            const container = document.getElementById('logsContainer');
+            
+            // Remove "no logs" message if this is the first log
+            if (logMessages.length === 1) {
+                container.innerHTML = '';
+            }
+            
+            const logDiv = document.createElement('div');
+            logDiv.className = 'mb-1';
+            
+            const levelColors = {
+                'log': 'text-secondary',
+                'info': 'text-info',
+                'warn': 'text-warning',
+                'error': 'text-danger'
+            };
+            
+            const time = logEntry.timestamp.toLocaleTimeString();
+            logDiv.innerHTML = `<span class="text-muted">[${time}]</span> <span class="${levelColors[level] || 'text-secondary'}">[${level.toUpperCase()}]</span> ${escapeHtml(message)}`;
+            
+            container.appendChild(logDiv);
+            
+            // Auto-scroll if enabled
+            if (document.getElementById('autoScrollLogs').checked) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         function showConfirmation(message) {
             const confirmation = document.getElementById('actionConfirmation');
@@ -274,6 +438,10 @@
             connection.on('ClientDisconnected', () => {
                 document.getElementById('connectedState').classList.add('d-none');
                 document.getElementById('disconnectedState').classList.remove('d-none');
+            });
+
+            connection.on('ReceiveLogMessage', (level, message, timestamp) => {
+                addLogMessage(level, message, timestamp);
             });
 
             connection.on('ResetServer', () => {

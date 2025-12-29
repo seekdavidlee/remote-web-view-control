@@ -83,6 +83,44 @@ function createDisplayWindow() {
     return displayWindow;
 }
 
+// Helper function to send logs to server
+function sendLog(level, ...args) {
+    const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+    
+    // Also log locally
+    const originalConsole = {
+        log: console.log.bind(console),
+        info: console.info.bind(console),
+        warn: console.warn.bind(console),
+        error: console.error.bind(console)
+    };
+    originalConsole[level](message);
+    
+    // Send to server if connected
+    if (connection && currentSessionCode) {
+        try {
+            connection.invoke('SendLogMessage', currentSessionCode, level, message);
+        } catch (error) {
+            // Silently fail if we can't send logs
+        }
+    }
+}
+
+// Override console methods to capture logs
+const originalConsole = {
+    log: console.log.bind(console),
+    info: console.info.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console)
+};
+
+console.log = (...args) => sendLog('log', ...args);
+console.info = (...args) => sendLog('info', ...args);
+console.warn = (...args) => sendLog('warn', ...args);
+console.error = (...args) => sendLog('error', ...args);
+
 async function connectToServer(url, code) {
     // Prevent multiple simultaneous connection attempts
     if (isConnecting) {
@@ -172,6 +210,33 @@ async function connectToServer(url, code) {
                             mainWindow.webContents.send('script-executed', { success: false, error: error.message });
                         });
                 }
+            }
+        });
+
+        // Handle mouse click simulation
+        connection.on('SimulateMouseClick', (x, y) => {
+            console.log(`Simulating mouse click at (${x}, ${y})`);
+            if (displayWindow) {
+                // Send mouseDown event
+                displayWindow.webContents.sendInputEvent({
+                    type: 'mouseDown',
+                    x: x,
+                    y: y,
+                    button: 'left',
+                    clickCount: 1
+                });
+                
+                // Send mouseUp event to complete the click
+                displayWindow.webContents.sendInputEvent({
+                    type: 'mouseUp',
+                    x: x,
+                    y: y,
+                    button: 'left',
+                    clickCount: 1
+                });
+                
+                console.log('Mouse click simulated successfully');
+                mainWindow.webContents.send('click-simulated', { x, y });
             }
         });
 
