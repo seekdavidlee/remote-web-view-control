@@ -103,32 +103,7 @@ function createDisplayWindow() {
     return displayWindow;
 }
 
-// Helper function to send logs to server
-function sendLog(level, ...args) {
-    const message = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-    ).join(' ');
-    
-    // Also log locally
-    const originalConsole = {
-        log: console.log.bind(console),
-        info: console.info.bind(console),
-        warn: console.warn.bind(console),
-        error: console.error.bind(console)
-    };
-    originalConsole[level](message);
-    
-    // Send to server if connected
-    if (connection && currentSessionCode) {
-        try {
-            connection.invoke('SendLogMessage', currentSessionCode, level, message);
-        } catch (error) {
-            // Silently fail if we can't send logs
-        }
-    }
-}
-
-// Override console methods to capture logs
+// Store original console methods before overriding
 const originalConsole = {
     log: console.log.bind(console),
     info: console.info.bind(console),
@@ -136,6 +111,28 @@ const originalConsole = {
     error: console.error.bind(console)
 };
 
+// Helper function to send logs to server
+function sendLog(level, ...args) {
+    const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+    
+    // Log locally using the original console methods
+    originalConsole[level](message);
+    
+    // Send to server if connected (but don't log about it to avoid infinite loop)
+    if (connection && currentSessionCode) {
+        try {
+            connection.invoke('SendLogMessage', currentSessionCode, level, message).catch(() => {
+                // Silently fail - don't log errors about logging to avoid recursion
+            });
+        } catch (error) {
+            // Silently fail if we can't send logs
+        }
+    }
+}
+
+// Override console methods to capture logs
 console.log = (...args) => sendLog('log', ...args);
 console.info = (...args) => sendLog('info', ...args);
 console.warn = (...args) => sendLog('warn', ...args);
