@@ -92,6 +92,19 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
         await Clients.Client(session.ServerConnectionId).SendAsync("ReceiveLogMessage", level, message, DateTime.UtcNow);
     }
 
+    public async Task SendDisplayDimensions(string code, int width, int height)
+    {
+        var session = sessionService.GetSession(code);
+        if (session == null || string.IsNullOrEmpty(session.ServerConnectionId))
+        {
+            logger.LogWarning("Cannot send display dimensions - no server connected for session: {Code}", code);
+            return;
+        }
+
+        await Clients.Client(session.ServerConnectionId).SendAsync("ReceiveDisplayDimensions", width, height);
+        logger.LogInformation("Display dimensions sent to server in session {Code}: {Width}x{Height}", code, width, height);
+    }
+
     public async Task ClearAllSessions()
     {
         var allSessions = sessionService.GetAllSessions().ToList();

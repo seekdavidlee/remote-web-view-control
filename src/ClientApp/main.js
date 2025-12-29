@@ -80,6 +80,26 @@ function createDisplayWindow() {
         displayWindow = null;
     });
 
+    // Send display dimensions when ready
+    displayWindow.webContents.on('did-finish-load', () => {
+        const bounds = displayWindow.getBounds();
+        console.log(`Display window dimensions: ${bounds.width}x${bounds.height}`);
+        if (connection && currentSessionCode) {
+            connection.invoke('SendDisplayDimensions', currentSessionCode, bounds.width, bounds.height)
+                .catch(err => console.error('Error sending display dimensions:', err));
+        }
+    });
+
+    // Update dimensions on resize
+    displayWindow.on('resize', () => {
+        const bounds = displayWindow.getBounds();
+        console.log(`Display window resized: ${bounds.width}x${bounds.height}`);
+        if (connection && currentSessionCode) {
+            connection.invoke('SendDisplayDimensions', currentSessionCode, bounds.width, bounds.height)
+                .catch(err => console.error('Error sending display dimensions:', err));
+        }
+    });
+
     return displayWindow;
 }
 

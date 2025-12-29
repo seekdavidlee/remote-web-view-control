@@ -210,6 +210,10 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="alert alert-info" id="dimensionsInfo" style="display: none;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Display Size: <strong id="displayWidth">-</strong> x <strong id="displayHeight">-</strong> pixels
+                    </div>
                     <div class="mb-3">
                         <label for="clickX" class="form-label">X Coordinate:</label>
                         <input type="number" class="form-control" id="clickX" placeholder="e.g., 100" value="100" min="0">
@@ -287,6 +291,9 @@
 
         // Mouse click simulation
         let mouseClickModal = null;
+        let displayWidth = null;
+        let displayHeight = null;
+        
         document.getElementById('btnSimulateClick').addEventListener('click', () => {
             if (!mouseClickModal) {
                 mouseClickModal = new bootstrap.Modal(document.getElementById('mouseClickModal'));
@@ -301,6 +308,14 @@
             if (isNaN(x) || isNaN(y) || x < 0 || y < 0) {
                 alert('Please enter valid coordinates (positive numbers)');
                 return;
+            }
+
+            // Validate against display dimensions if available
+            if (displayWidth !== null && displayHeight !== null) {
+                if (x >= displayWidth || y >= displayHeight) {
+                    alert(`Coordinates out of bounds!\nMax X: ${displayWidth - 1}, Max Y: ${displayHeight - 1}`);
+                    return;
+                }
             }
 
             try {
@@ -442,6 +457,22 @@
 
             connection.on('ReceiveLogMessage', (level, message, timestamp) => {
                 addLogMessage(level, message, timestamp);
+            });
+
+            connection.on('ReceiveDisplayDimensions', (width, height) => {
+                displayWidth = width;
+                displayHeight = height;
+                
+                // Update modal display
+                document.getElementById('displayWidth').textContent = width;
+                document.getElementById('displayHeight').textContent = height;
+                document.getElementById('dimensionsInfo').style.display = 'block';
+                
+                // Update input max attributes
+                document.getElementById('clickX').setAttribute('max', width - 1);
+                document.getElementById('clickY').setAttribute('max', height - 1);
+                
+                console.log(`Display dimensions received: ${width}x${height}`);
             });
 
             connection.on('ResetServer', () => {
