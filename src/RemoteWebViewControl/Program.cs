@@ -64,6 +64,7 @@ app.MapPost("/api/admin/clear", (SessionService sessionService) =>
 // Route redirects for clean URLs
 app.MapGet("/server", () => Results.Redirect("/server.html"));
 app.MapGet("/admin", () => Results.Redirect("/admin.html"));
+app.MapGet("/test/mouse-click", () => Results.Redirect("/test/mouse-click.html"));
 app.MapGet("/", () => Results.Redirect("/server.html"));
 
 app.Run();
