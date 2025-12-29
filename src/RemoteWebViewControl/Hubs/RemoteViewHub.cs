@@ -68,6 +68,51 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
         logger.LogInformation("Script sent to client in session {Code}", code);
     }
 
+    public async Task ClearAllSessions()
+    {
+        var allSessions = sessionService.GetAllSessions().ToList();
+        
+        logger.LogInformation("Clearing {Count} sessions", allSessions.Count);
+        
+        foreach (var session in allSessions)
+        {
+            // Notify client apps to reset first
+            if (!string.IsNullOrEmpty(session.ClientConnectionId))
+            {
+                try
+                {
+                    logger.LogInformation("Sending ResetClient to session {Code}", session.Code);
+                    await Clients.Client(session.ClientConnectionId).SendAsync("ResetClient");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error sending reset to client in session {Code}", session.Code);
+                }
+            }
+            
+            // Notify server pages to reset
+            if (!string.IsNullOrEmpty(session.ServerConnectionId))
+            {
+                try
+                {
+                    logger.LogInformation("Sending ResetServer to session {Code}", session.Code);
+                    await Clients.Client(session.ServerConnectionId).SendAsync("ResetServer");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error sending reset to server in session {Code}", session.Code);
+                }
+            }
+        }
+        
+        // Give clients time to receive the reset signal before clearing sessions
+        await Task.Delay(500);
+        
+        // Clear all sessions
+        sessionService.ClearAllSessions();
+        logger.LogInformation("All sessions cleared");
+    }
+
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var session = sessionService.GetSessionByConnectionId(Context.ConnectionId);

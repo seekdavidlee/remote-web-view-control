@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onServerDisconnected: (callback) => ipcRenderer.on('server-disconnected', () => callback()),
     onReconnecting: (callback) => ipcRenderer.on('reconnecting', () => callback()),
     onReconnected: (callback) => ipcRenderer.on('reconnected', () => callback()),
-    onConnectionClosed: (callback) => ipcRenderer.on('connection-closed', () => callback())
+    onConnectionClosed: (callback) => ipcRenderer.on('connection-closed', () => callback()),
+    onResetToInitial: (callback) => ipcRenderer.on('reset-to-initial', () => callback())
 });

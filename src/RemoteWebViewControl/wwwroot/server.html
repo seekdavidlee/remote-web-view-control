@@ -256,8 +256,13 @@
 
         async function connectToHub() {
             connection = new signalR.HubConnectionBuilder()
-                .withUrl('/hub/remoteview')
+                .withUrl('/hub/remoteview', {
+                    transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling,
+                    skipNegotiation: false,
+                    timeout: 60000
+                })
                 .withAutomaticReconnect()
+                .configureLogging(signalR.LogLevel.Information)
                 .build();
 
             connection.on('ClientConnected', () => {
@@ -271,15 +276,24 @@
                 document.getElementById('disconnectedState').classList.remove('d-none');
             });
 
+            connection.on('ResetServer', () => {
+                console.log('Reset signal received - reloading page');
+                window.location.reload();
+            });
+
             try {
+                console.log('Starting SignalR connection...');
                 await connection.start();
+                console.log('SignalR connection started successfully');
                 const success = await connection.invoke('ServerJoinSession', sessionCode);
+                console.log('ServerJoinSession result:', success);
                 if (!success) {
                     alert('Failed to join session. Invalid code.');
                 }
             } catch (error) {
                 console.error('Error connecting to hub:', error);
-                alert('Failed to connect. Please refresh and try again.');
+                console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+                alert('Failed to connect: ' + error.message + '\n\nCheck browser console for details.');
             }
         }
     </script>

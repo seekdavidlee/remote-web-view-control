@@ -260,6 +260,18 @@
             btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
         });
 
+        window.electronAPI.onResetToInitial(() => {
+            // Reset UI to initial state
+            connectedState.classList.add('d-none');
+            reconnectingState.classList.add('d-none');
+            connectionForm.classList.remove('d-none');
+            btnConnect.disabled = false;
+            btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
+            logArea.innerHTML = '<div class="text-muted">Waiting for commands...</div>';
+            codeInput.value = '';
+            addLog('Session cleared by admin - reset to initial state', 'info');
+        });
+
         // Enter key to connect
         codeInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') btnConnect.click();

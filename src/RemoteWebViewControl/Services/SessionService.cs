@@ -79,6 +79,16 @@ public class SessionService
             s.ServerConnectionId == connectionId || s.ClientConnectionId == connectionId);
     }
 
+    public IEnumerable<Session> GetAllSessions()
+    {
+        return _sessions.Values.OrderByDescending(s => s.CreatedAt);
+    }
+
+    public void ClearAllSessions()
+    {
+        _sessions.Clear();
+    }
+
     private static string GenerateCode()
     {
         return new string([.. Enumerable.Range(0, 5).Select(_ => AlphaNumericChars[_random.Next(AlphaNumericChars.Length)])]);

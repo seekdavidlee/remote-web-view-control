@@ -7,6 +7,7 @@ let displayWindow = null;
 let connection = null;
 let currentSessionCode = null;
 let serverUrl = '';
+let isConnecting = false;
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
@@ -75,6 +76,7 @@ function createDisplayWindow() {
     displayWindow.loadFile('waiting.html');
 
     displayWindow.on('closed', () => {
+        console.log('Display window closed event triggered');
         displayWindow = null;
     });
 
@@ -82,6 +84,18 @@ function createDisplayWindow() {
 }
 
 async function connectToServer(url, code) {
+    // Prevent multiple simultaneous connection attempts
+    if (isConnecting) {
+        console.log('Connection already in progress');
+        return;
+    }
+
+    // Disconnect any existing connection first
+    if (connection) {
+        await disconnect();
+    }
+
+    isConnecting = true;
     serverUrl = url.replace(/\/$/, ''); // Remove trailing slash
     currentSessionCode = code.toUpperCase();
 
@@ -92,13 +106,32 @@ async function connectToServer(url, code) {
         
         if (!data.valid) {
             mainWindow.webContents.send('connection-error', 'Invalid code');
+            isConnecting = false;
             return;
         }
 
-        // Create SignalR connection
+        // Create SignalR connection with longer timeouts for Raspberry Pi
         connection = new signalR.HubConnectionBuilder()
-            .withUrl(`${serverUrl}/hub/remoteview`)
-            .withAutomaticReconnect()
+            .withUrl(`${serverUrl}/hub/remoteview`, {
+                timeout: 60000, // 60 seconds timeout (increased for slower devices)
+                headers: {
+                    'User-Agent': 'ElectronClient/1.0'
+                },
+                // Use transport fallbacks for better compatibility on Raspberry Pi
+                transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling,
+                skipNegotiation: false, // Ensure proper transport negotiation
+                withCredentials: false // Don't send credentials (helps with CORS)
+            })
+            .withAutomaticReconnect({
+                nextRetryDelayInMilliseconds: retryContext => {
+                    // Progressive backoff: 2s, 5s, 10s, 30s
+                    if (retryContext.previousRetryCount === 0) return 2000;
+                    if (retryContext.previousRetryCount === 1) return 5000;
+                    if (retryContext.previousRetryCount === 2) return 10000;
+                    return 30000;
+                }
+            })
+            .configureLogging(signalR.LogLevel.Information)
             .build();
 
         // Handle URL commands
@@ -142,9 +175,17 @@ async function connectToServer(url, code) {
             }
         });
 
-        // Handle server disconnect
-        connection.on('ServerDisconnected', () => {
+        // Handle server disconnect - fully disconnect client
+        connection.on('ServerDisconnected', async () => {
+            console.log('Server disconnected - resetting client');
             mainWindow.webContents.send('server-disconnected');
+            await resetToInitialState();
+        });
+
+        // Handle reset signal from admin
+        connection.on('ResetClient', async () => {
+            console.log('Reset signal received from admin');
+            await resetToInitialState();
         });
 
         connection.onreconnecting(() => {
@@ -156,36 +197,96 @@ async function connectToServer(url, code) {
             connection.invoke('ClientJoinSession', currentSessionCode);
         });
 
-        connection.onclose(() => {
+        connection.onclose(async (error) => {
+            console.log('Connection closed', error);
+            isConnecting = false;
+            
+            // Clean up display window if connection closes unexpectedly
+            if (displayWindow && !displayWindow.isDestroyed()) {
+                displayWindow.close();
+                displayWindow = null;
+            }
+            
             mainWindow.webContents.send('connection-closed');
         });
 
-        // Start connection
+        // Start connection with error handling
+        console.log('Starting SignalR connection...');
         await connection.start();
+        console.log('SignalR connection started successfully');
+        
         const success = await connection.invoke('ClientJoinSession', currentSessionCode);
 
         if (success) {
             createDisplayWindow();
             mainWindow.webContents.send('connected', currentSessionCode);
         } else {
+            await disconnect();
             mainWindow.webContents.send('connection-error', 'Failed to join session');
         }
     } catch (error) {
         console.error('Connection error:', error);
+        
+        // Clean up connection on error
+        if (connection) {
+            try {
+                await connection.stop();
+            } catch (stopError) {
+                console.error('Error stopping connection:', stopError);
+            }
+            connection = null;
+        }
+        
         mainWindow.webContents.send('connection-error', error.message);
+    } finally {
+        isConnecting = false;
     }
 }
 
-function disconnect() {
+async function disconnect() {
+    isConnecting = false;
+    
     if (connection) {
-        connection.stop();
-        connection = null;
+        try {
+            // Check if connection is in a state where it can be stopped
+            if (connection.state !== signalR.HubConnectionState.Disconnected) {
+                console.log('Stopping connection...');
+                await connection.stop();
+                console.log('Connection stopped');
+            }
+        } catch (error) {
+            console.error('Error during disconnect:', error);
+        } finally {
+            connection = null;
+        }
     }
-    if (displayWindow) {
+    
+    if (displayWindow && !displayWindow.isDestroyed()) {
+        console.log('Closing display window');
         displayWindow.close();
         displayWindow = null;
     }
+    
     currentSessionCode = null;
+}
+
+async function resetToInitialState() {
+    console.log('Resetting to initial state...');
+    
+    // Force close display window immediately
+    if (displayWindow && !displayWindow.isDestroyed()) {
+        console.log('Forcing display window to close');
+        displayWindow.close();
+        displayWindow = null;
+    }
+    
+    // Disconnect from server
+    await disconnect();
+    
+    // Notify the main window to reset UI
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('reset-to-initial');
+    }
 }
 
 // IPC handlers
@@ -193,8 +294,8 @@ ipcMain.handle('connect', async (event, { url, code }) => {
     await connectToServer(url, code);
 });
 
-ipcMain.handle('disconnect', () => {
-    disconnect();
+ipcMain.handle('disconnect', async () => {
+    await disconnect();
 });
 
 ipcMain.handle('toggle-fullscreen', () => {
