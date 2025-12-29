@@ -80,8 +80,63 @@ function createDisplayWindow() {
         displayWindow = null;
     });
 
+    // Send display dimensions when ready
+    displayWindow.webContents.on('did-finish-load', () => {
+        const bounds = displayWindow.getBounds();
+        console.log(`Display window dimensions: ${bounds.width}x${bounds.height}`);
+        if (connection && currentSessionCode) {
+            connection.invoke('SendDisplayDimensions', currentSessionCode, bounds.width, bounds.height)
+                .catch(err => console.error('Error sending display dimensions:', err));
+        }
+    });
+
+    // Update dimensions on resize
+    displayWindow.on('resize', () => {
+        const bounds = displayWindow.getBounds();
+        console.log(`Display window resized: ${bounds.width}x${bounds.height}`);
+        if (connection && currentSessionCode) {
+            connection.invoke('SendDisplayDimensions', currentSessionCode, bounds.width, bounds.height)
+                .catch(err => console.error('Error sending display dimensions:', err));
+        }
+    });
+
     return displayWindow;
 }
+
+// Store original console methods before overriding
+const originalConsole = {
+    log: console.log.bind(console),
+    info: console.info.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console)
+};
+
+// Helper function to send logs to server
+function sendLog(level, ...args) {
+    const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+    
+    // Log locally using the original console methods
+    originalConsole[level](message);
+    
+    // Send to server if connected (but don't log about it to avoid infinite loop)
+    if (connection && currentSessionCode) {
+        try {
+            connection.invoke('SendLogMessage', currentSessionCode, level, message).catch(() => {
+                // Silently fail - don't log errors about logging to avoid recursion
+            });
+        } catch (error) {
+            // Silently fail if we can't send logs
+        }
+    }
+}
+
+// Override console methods to capture logs
+console.log = (...args) => sendLog('log', ...args);
+console.info = (...args) => sendLog('info', ...args);
+console.warn = (...args) => sendLog('warn', ...args);
+console.error = (...args) => sendLog('error', ...args);
 
 async function connectToServer(url, code) {
     // Prevent multiple simultaneous connection attempts
@@ -172,6 +227,33 @@ async function connectToServer(url, code) {
                             mainWindow.webContents.send('script-executed', { success: false, error: error.message });
                         });
                 }
+            }
+        });
+
+        // Handle mouse click simulation
+        connection.on('SimulateMouseClick', (x, y) => {
+            console.log(`Simulating mouse click at (${x}, ${y})`);
+            if (displayWindow) {
+                // Send mouseDown event
+                displayWindow.webContents.sendInputEvent({
+                    type: 'mouseDown',
+                    x: x,
+                    y: y,
+                    button: 'left',
+                    clickCount: 1
+                });
+                
+                // Send mouseUp event to complete the click
+                displayWindow.webContents.sendInputEvent({
+                    type: 'mouseUp',
+                    x: x,
+                    y: y,
+                    button: 'left',
+                    clickCount: 1
+                });
+                
+                console.log('Mouse click simulated successfully');
+                mainWindow.webContents.send('click-simulated', { x, y });
             }
         });
 

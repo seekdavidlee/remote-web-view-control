@@ -68,6 +68,43 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
         logger.LogInformation("Script sent to client in session {Code}", code);
     }
 
+    public async Task SimulateMouseClick(string code, int x, int y)
+    {
+        var session = sessionService.GetSession(code);
+        if (session == null || string.IsNullOrEmpty(session.ClientConnectionId))
+        {
+            logger.LogWarning("Cannot simulate mouse click - no client connected for session: {Code}", code);
+            return;
+        }
+
+        await Clients.Client(session.ClientConnectionId).SendAsync("SimulateMouseClick", x, y);
+        logger.LogInformation("Mouse click simulation sent to client in session {Code} at ({X}, {Y})", code, x, y);
+    }
+
+    public async Task SendLogMessage(string code, string level, string message)
+    {
+        var session = sessionService.GetSession(code);
+        if (session == null || string.IsNullOrEmpty(session.ServerConnectionId))
+        {
+            return;
+        }
+
+        await Clients.Client(session.ServerConnectionId).SendAsync("ReceiveLogMessage", level, message, DateTime.UtcNow);
+    }
+
+    public async Task SendDisplayDimensions(string code, int width, int height)
+    {
+        var session = sessionService.GetSession(code);
+        if (session == null || string.IsNullOrEmpty(session.ServerConnectionId))
+        {
+            logger.LogWarning("Cannot send display dimensions - no server connected for session: {Code}", code);
+            return;
+        }
+
+        await Clients.Client(session.ServerConnectionId).SendAsync("ReceiveDisplayDimensions", width, height);
+        logger.LogInformation("Display dimensions sent to server in session {Code}: {Width}x{Height}", code, width, height);
+    }
+
     public async Task ClearAllSessions()
     {
         var allSessions = sessionService.GetAllSessions().ToList();

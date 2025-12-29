@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Mouse Click</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .title {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .red-dot {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            background-color: red;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="title">Test Mouse Click</div>
+
+    <script>
+        let currentDot = null;
+
+        document.addEventListener('click', function(event) {
+            // Remove existing dot if it exists
+            if (currentDot) {
+                currentDot.remove();
+            }
+
+            // Create new red dot
+            currentDot = document.createElement('div');
+            currentDot.className = 'red-dot';
+            currentDot.style.left = event.pageX + 'px';
+            currentDot.style.top = event.pageY + 'px';
+            
+            document.body.appendChild(currentDot);
+        });
+    </script>
+</body>
+</html>
