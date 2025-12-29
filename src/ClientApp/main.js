@@ -76,6 +76,7 @@ function createDisplayWindow() {
     displayWindow.loadFile('waiting.html');
 
     displayWindow.on('closed', () => {
+        console.log('Display window closed event triggered');
         displayWindow = null;
     });
 
@@ -251,7 +252,8 @@ async function disconnect() {
         }
     }
     
-    if (displayWindow) {
+    if (displayWindow && !displayWindow.isDestroyed()) {
+        console.log('Closing display window');
         displayWindow.close();
         displayWindow = null;
     }
@@ -262,11 +264,18 @@ async function disconnect() {
 async function resetToInitialState() {
     console.log('Resetting to initial state...');
     
-    // Disconnect and close display window
+    // Force close display window immediately
+    if (displayWindow && !displayWindow.isDestroyed()) {
+        console.log('Forcing display window to close');
+        displayWindow.close();
+        displayWindow = null;
+    }
+    
+    // Disconnect from server
     await disconnect();
     
     // Notify the main window to reset UI
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('reset-to-initial');
     }
 }
