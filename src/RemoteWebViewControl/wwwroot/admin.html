@@ -273,13 +273,14 @@
 
         async function clearAllSessions() {
             try {
-                const response = await fetch('/api/admin/clear', { method: 'POST' });
-                
-                if (response.ok) {
-                    // Notify via SignalR
-                    if (connection && connection.state === signalR.HubConnectionState.Connected) {
-                        await connection.invoke('ClearAllSessions');
-                    }
+                // Use SignalR to clear sessions so signals are sent to clients
+                if (connection && connection.state === signalR.HubConnectionState.Connected) {
+                    console.log('Clearing all sessions via SignalR...');
+                    await connection.invoke('ClearAllSessions');
+                    console.log('Sessions cleared successfully');
+                    
+                    // Wait a moment for clients to disconnect
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     
                     // Reload sessions
                     await loadSessions();
@@ -296,11 +297,11 @@
                     
                     setTimeout(() => successAlert.remove(), 5000);
                 } else {
-                    throw new Error('Failed to clear sessions');
+                    throw new Error('Not connected to server');
                 }
             } catch (error) {
                 console.error('Error clearing sessions:', error);
-                alert('Failed to clear sessions. Please try again.');
+                alert('Failed to clear sessions: ' + error.message);
             }
         }
 

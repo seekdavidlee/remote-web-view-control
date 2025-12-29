@@ -175,9 +175,11 @@ async function connectToServer(url, code) {
             }
         });
 
-        // Handle server disconnect
-        connection.on('ServerDisconnected', () => {
+        // Handle server disconnect - fully disconnect client
+        connection.on('ServerDisconnected', async () => {
+            console.log('Server disconnected - resetting client');
             mainWindow.webContents.send('server-disconnected');
+            await resetToInitialState();
         });
 
         // Handle reset signal from admin
@@ -195,9 +197,16 @@ async function connectToServer(url, code) {
             connection.invoke('ClientJoinSession', currentSessionCode);
         });
 
-        connection.onclose((error) => {
+        connection.onclose(async (error) => {
             console.log('Connection closed', error);
             isConnecting = false;
+            
+            // Clean up display window if connection closes unexpectedly
+            if (displayWindow && !displayWindow.isDestroyed()) {
+                displayWindow.close();
+                displayWindow = null;
+            }
+            
             mainWindow.webContents.send('connection-closed');
         });
 
