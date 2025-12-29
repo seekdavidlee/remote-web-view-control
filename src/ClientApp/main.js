@@ -179,6 +179,12 @@ async function connectToServer(url, code) {
             mainWindow.webContents.send('server-disconnected');
         });
 
+        // Handle reset signal from admin
+        connection.on('ResetClient', async () => {
+            console.log('Reset signal received from admin');
+            await resetToInitialState();
+        });
+
         connection.onreconnecting(() => {
             mainWindow.webContents.send('reconnecting');
         });
@@ -251,6 +257,18 @@ async function disconnect() {
     }
     
     currentSessionCode = null;
+}
+
+async function resetToInitialState() {
+    console.log('Resetting to initial state...');
+    
+    // Disconnect and close display window
+    await disconnect();
+    
+    // Notify the main window to reset UI
+    if (mainWindow) {
+        mainWindow.webContents.send('reset-to-initial');
+    }
 }
 
 // IPC handlers

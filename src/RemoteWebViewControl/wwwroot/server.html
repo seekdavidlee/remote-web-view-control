@@ -276,6 +276,11 @@
                 document.getElementById('disconnectedState').classList.remove('d-none');
             });
 
+            connection.on('ResetServer', () => {
+                console.log('Reset signal received - reloading page');
+                window.location.reload();
+            });
+
             try {
                 console.log('Starting SignalR connection...');
                 await connection.start();

@@ -48,8 +48,22 @@ app.MapGet("/api/session/validate/{code}", (string code, SessionService sessionS
     return Results.Ok(new { valid });
 });
 
+// Admin API Endpoints
+app.MapGet("/api/admin/sessions", (SessionService sessionService) =>
+{
+    var sessions = sessionService.GetAllSessions();
+    return Results.Ok(sessions);
+});
+
+app.MapPost("/api/admin/clear", (SessionService sessionService) =>
+{
+    sessionService.ClearAllSessions();
+    return Results.Ok(new { success = true, message = "All sessions cleared" });
+});
+
 // Route redirects for clean URLs
 app.MapGet("/server", () => Results.Redirect("/server.html"));
+app.MapGet("/admin", () => Results.Redirect("/admin.html"));
 app.MapGet("/", () => Results.Redirect("/server.html"));
 
 app.Run();

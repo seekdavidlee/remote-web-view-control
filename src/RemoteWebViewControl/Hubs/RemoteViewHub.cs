@@ -68,6 +68,30 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
         logger.LogInformation("Script sent to client in session {Code}", code);
     }
 
+    public async Task ClearAllSessions()
+    {
+        var allSessions = sessionService.GetAllSessions().ToList();
+        
+        foreach (var session in allSessions)
+        {
+            // Notify server pages to reset
+            if (!string.IsNullOrEmpty(session.ServerConnectionId))
+            {
+                await Clients.Client(session.ServerConnectionId).SendAsync("ResetServer");
+            }
+            
+            // Notify client apps to reset
+            if (!string.IsNullOrEmpty(session.ClientConnectionId))
+            {
+                await Clients.Client(session.ClientConnectionId).SendAsync("ResetClient");
+            }
+        }
+        
+        // Clear all sessions
+        sessionService.ClearAllSessions();
+        logger.LogInformation("All sessions cleared");
+    }
+
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var session = sessionService.GetSessionByConnectionId(Context.ConnectionId);
