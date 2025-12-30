@@ -64,31 +64,27 @@
                             <h2 class="mt-2">Server Control Panel</h2>
                         </div>
 
-                        <!-- Initial State - Getting Code -->
-                        <div id="initialState" class="text-center">
-                            <button id="btnGetCode" class="btn btn-primary btn-lg px-5">
-                                <i class="bi bi-key me-2"></i>Generate Session Code
-                            </button>
+                    <!-- Waiting for client -->
+                    <div id="waitingState">
+                        <div class="text-center mb-4">
+                            <p class="text-muted mb-2">Controlling client:</p>
+                            <div class="code-display p-3 bg-light rounded" id="clientNameDisplay"></div>
                         </div>
-
-                        <!-- Code Display State -->
-                        <div id="codeState" class="d-none">
-                            <div class="text-center mb-4">
-                                <p class="text-muted mb-2">Share this code with the client:</p>
-                                <div class="code-display p-3 bg-light rounded" id="sessionCode"></div>
-                                <button id="btnCopyCode" class="btn btn-outline-secondary btn-sm mt-2">
-                                    <i class="bi bi-clipboard me-1"></i>Copy Code
-                                </button>
-                            </div>
-                            
-                            <div class="alert alert-info" id="waitingAlert">
-                                <span class="status-indicator status-waiting"></span>
-                                Waiting for client to connect...
-                            </div>
+                        
+                        <div class="alert alert-info" id="waitingAlert">
+                            <span class="status-indicator status-waiting"></span>
+                            Waiting for client to connect...
                         </div>
+                        
+                        <div class="text-center">
+                            <a href="/admin" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>Back to Admin Panel
+                            </a>
+                        </div>
+                    </div>
 
-                        <!-- Connected State -->
-                        <div id="connectedState" class="d-none">
+                    <!-- Connected State -->
+                    <div id="connectedState" class="d-none">
                             <div class="alert alert-success mb-4">
                                 <span class="status-indicator status-connected"></span>
                                 <strong>Client Connected!</strong>
@@ -240,32 +236,30 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <script>
         let connection = null;
-        let sessionCode = '';
+        let clientName = '';
 
-        document.getElementById('btnGetCode').addEventListener('click', async () => {
-            try {
-                const response = await fetch('/api/session/create', { method: 'POST' });
-                const data = await response.json();
-                sessionCode = data.code;
-                
-                document.getElementById('sessionCode').textContent = sessionCode;
-                document.getElementById('initialState').classList.add('d-none');
-                document.getElementById('codeState').classList.remove('d-none');
-                
-                await connectToHub();
-            } catch (error) {
-                console.error('Error creating session:', error);
-                alert('Failed to create session. Please try again.');
+        // Get client name from URL path
+        function getClientNameFromUrl() {
+            const pathParts = window.location.pathname.split('/').filter(p => p);
+            // Path should be /server/<client-name>
+            if (pathParts.length >= 2 && pathParts[0] === 'server') {
+                return decodeURIComponent(pathParts[1]);
             }
-        });
+            return null;
+        }
 
-        document.getElementById('btnCopyCode').addEventListener('click', () => {
-            navigator.clipboard.writeText(sessionCode);
-            const btn = document.getElementById('btnCopyCode');
-            btn.innerHTML = '<i class="bi bi-check me-1"></i>Copied!';
-            setTimeout(() => {
-                btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Code';
-            }, 2000);
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            clientName = getClientNameFromUrl();
+            
+            if (!clientName) {
+                window.location.href = '/admin?error=' + encodeURIComponent('No client specified');
+                return;
+            }
+
+            document.getElementById('clientNameDisplay').textContent = clientName;
+            
+            await connectToHub();
         });
 
         document.getElementById('btnSendUrl').addEventListener('click', sendUrl);
@@ -280,7 +274,7 @@
             btn.addEventListener('click', async () => {
                 const script = btn.dataset.script;
                 try {
-                    await connection.invoke('ExecuteScriptOnClient', sessionCode, script);
+                    await connection.invoke('ExecuteScriptOnClient', clientName, script);
                     showConfirmation('Script executed!');
                 } catch (error) {
                     console.error('Error executing script:', error);
@@ -319,7 +313,7 @@
             }
 
             try {
-                await connection.invoke('SimulateMouseClick', sessionCode, x, y);
+                await connection.invoke('SimulateMouseClick', clientName, x, y);
                 mouseClickModal.hide();
                 showConfirmation(`Mouse click sent at (${x}, ${y})`);
             } catch (error) {
@@ -409,7 +403,7 @@
             }
 
             try {
-                await connection.invoke('SendUrlToClient', sessionCode, url);
+                await connection.invoke('SendUrlToClient', clientName, url);
                 showConfirmation('URL sent successfully!');
             } catch (error) {
                 console.error('Error sending URL:', error);
@@ -425,7 +419,7 @@
             }
 
             try {
-                await connection.invoke('ExecuteScriptOnClient', sessionCode, script);
+                await connection.invoke('ExecuteScriptOnClient', clientName, script);
                 showConfirmation('Script executed!');
             } catch (error) {
                 console.error('Error executing script:', error);
@@ -446,6 +440,7 @@
 
             connection.on('ClientConnected', () => {
                 document.getElementById('waitingAlert').classList.add('d-none');
+                document.getElementById('waitingState').classList.add('d-none');
                 document.getElementById('connectedState').classList.remove('d-none');
                 document.getElementById('disconnectedState').classList.add('d-none');
             });
@@ -476,18 +471,18 @@
             });
 
             connection.on('ResetServer', () => {
-                console.log('Reset signal received - reloading page');
-                window.location.reload();
+                console.log('Reset signal received - redirecting to admin');
+                window.location.href = '/admin';
             });
 
             try {
                 console.log('Starting SignalR connection...');
                 await connection.start();
                 console.log('SignalR connection started successfully');
-                const success = await connection.invoke('ServerJoinSession', sessionCode);
+                const success = await connection.invoke('ServerJoinSession', clientName);
                 console.log('ServerJoinSession result:', success);
                 if (!success) {
-                    alert('Failed to join session. Invalid code.');
+                    window.location.href = '/admin?error=' + encodeURIComponent('Client does not exist or is not connected');
                 }
             } catch (error) {
                 console.error('Error connecting to hub:', error);

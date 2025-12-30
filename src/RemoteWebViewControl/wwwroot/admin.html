@@ -40,6 +40,12 @@
             font-size: 1.1rem;
             font-weight: bold;
             color: #2c3e50;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .session-code:hover {
+            color: #667eea;
+            text-decoration: underline;
         }
         .table th {
             background-color: #f8f9fa;
@@ -114,8 +120,8 @@
         </div>
 
         <div class="text-center mt-3">
-            <a href="/server.html" class="btn btn-outline-light">
-                <i class="bi bi-arrow-left me-1"></i>Back to Server Control
+            <a href="/admin" class="btn btn-outline-light">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh Page
             </a>
         </div>
     </div>
@@ -189,8 +195,8 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>Session Code</th>
-                                <th>Created</th>
+                                <th>Client Name</th>
+                                <th>Connected</th>
                                 <th>Server Status</th>
                                 <th>Client Status</th>
                                 <th>Overall Status</th>
@@ -222,14 +228,18 @@
                 overallClass = 'status-disconnected';
             }
 
-            const createdTime = new Date(session.createdAt).toLocaleString();
-            const timeAgo = getTimeAgo(new Date(session.createdAt));
+            const connectedTime = new Date(session.lastActivity).toLocaleString();
+            const timeAgo = getTimeAgo(new Date(session.lastActivity));
 
             return `
                 <tr>
-                    <td><span class="session-code">${session.code}</span></td>
                     <td>
-                        <div>${createdTime}</div>
+                        <a href="/server/${encodeURIComponent(session.clientName)}" class="session-code">
+                            ${escapeHtml(session.clientName)}
+                        </a>
+                    </td>
+                    <td>
+                        <div>${connectedTime}</div>
                         <small class="text-muted">${timeAgo}</small>
                     </td>
                     <td>
@@ -247,6 +257,12 @@
                     </td>
                 </tr>
             `;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         function getTimeAgo(date) {
@@ -340,6 +356,24 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             clearAllModal = new bootstrap.Modal(document.getElementById('clearAllModal'));
+            
+            // Check for error messages in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const errorMsg = urlParams.get('error');
+            if (errorMsg) {
+                const container = document.getElementById('sessionsContainer');
+                const errorAlert = document.createElement('div');
+                errorAlert.className = 'alert alert-danger alert-dismissible fade show';
+                errorAlert.innerHTML = `
+                    <i class="bi bi-exclamation-triangle me-2"></i>${escapeHtml(errorMsg)}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                container.insertBefore(errorAlert, container.firstChild);
+                
+                // Clear error from URL after showing it
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            
             await connectToHub();
             await loadSessions();
             

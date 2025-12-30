@@ -1,13 +1,45 @@
-const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { app, BrowserWindow, ipcMain, session, dialog } = require('electron');
 const path = require('path');
 const signalR = require('@microsoft/signalr');
+const os = require('os');
+const fs = require('fs');
+
+// Load configuration
+let config;
+const configPath = path.join(__dirname, 'config.json');
+try {
+    if (!fs.existsSync(configPath)) {
+        console.error('ERROR: config.json not found!');
+        console.error(`Expected location: ${configPath}`);
+        console.error('Please create config.json based on config.example.json');
+        app.quit();
+        process.exit(1);
+    }
+    
+    const configData = fs.readFileSync(configPath, 'utf8');
+    config = JSON.parse(configData);
+    
+    if (!config.serverUrl || config.serverUrl.trim() === '') {
+        console.error('ERROR: serverUrl is not configured in config.json');
+        console.error('Please set a valid serverUrl in config.json');
+        app.quit();
+        process.exit(1);
+    }
+    
+    console.log(`Server URL configured: ${config.serverUrl}`);
+} catch (error) {
+    console.error('ERROR: Failed to load config.json:', error.message);
+    app.quit();
+    process.exit(1);
+}
 
 let mainWindow = null;
 let displayWindow = null;
 let connection = null;
-let currentSessionCode = null;
+let currentClientName = os.hostname();
 let serverUrl = '';
 let isConnecting = false;
+let isDisconnecting = false;
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
@@ -24,6 +56,11 @@ function createMainWindow() {
 
     mainWindow.loadFile('index.html');
     mainWindow.setMenuBarVisibility(false);
+    
+    // Send config to renderer process when window is ready
+    mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.send('config-loaded', config);
+    });
 
     mainWindow.on('closed', () => {
         mainWindow = null;
@@ -75,17 +112,36 @@ function createDisplayWindow() {
 
     displayWindow.loadFile('waiting.html');
 
+    // Prevent closing the display window - just toggle fullscreen instead
+    displayWindow.on('close', (event) => {
+        // Only prevent close if not disconnecting and app isn't quitting
+        if (!isDisconnecting && displayWindow && !displayWindow.isDestroyed()) {
+            event.preventDefault();
+            if (displayWindow.isFullScreen()) {
+                displayWindow.setFullScreen(false);
+            }
+            console.log('Display window close prevented - toggled fullscreen off');
+        }
+    });
+
     displayWindow.on('closed', () => {
         console.log('Display window closed event triggered');
         displayWindow = null;
+    });
+
+    // Add keyboard shortcut for toggling fullscreen (Escape or F11)
+    displayWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.type === 'keyDown' && (input.key === 'Escape' || input.key === 'F11')) {
+            displayWindow.setFullScreen(!displayWindow.isFullScreen());
+        }
     });
 
     // Send display dimensions when ready
     displayWindow.webContents.on('did-finish-load', () => {
         const bounds = displayWindow.getBounds();
         console.log(`Display window dimensions: ${bounds.width}x${bounds.height}`);
-        if (connection && currentSessionCode) {
-            connection.invoke('SendDisplayDimensions', currentSessionCode, bounds.width, bounds.height)
+        if (connection && currentClientName) {
+            connection.invoke('SendDisplayDimensions', currentClientName, bounds.width, bounds.height)
                 .catch(err => console.error('Error sending display dimensions:', err));
         }
     });
@@ -94,8 +150,8 @@ function createDisplayWindow() {
     displayWindow.on('resize', () => {
         const bounds = displayWindow.getBounds();
         console.log(`Display window resized: ${bounds.width}x${bounds.height}`);
-        if (connection && currentSessionCode) {
-            connection.invoke('SendDisplayDimensions', currentSessionCode, bounds.width, bounds.height)
+        if (connection && currentClientName) {
+            connection.invoke('SendDisplayDimensions', currentClientName, bounds.width, bounds.height)
                 .catch(err => console.error('Error sending display dimensions:', err));
         }
     });
@@ -121,9 +177,9 @@ function sendLog(level, ...args) {
     originalConsole[level](message);
     
     // Send to server if connected (but don't log about it to avoid infinite loop)
-    if (connection && currentSessionCode) {
+    if (connection && currentClientName) {
         try {
-            connection.invoke('SendLogMessage', currentSessionCode, level, message).catch(() => {
+            connection.invoke('SendLogMessage', currentClientName, level, message).catch(() => {
                 // Silently fail - don't log errors about logging to avoid recursion
             });
         } catch (error) {
@@ -138,7 +194,7 @@ console.info = (...args) => sendLog('info', ...args);
 console.warn = (...args) => sendLog('warn', ...args);
 console.error = (...args) => sendLog('error', ...args);
 
-async function connectToServer(url, code) {
+async function connectToServer(url) {
     // Prevent multiple simultaneous connection attempts
     if (isConnecting) {
         console.log('Connection already in progress');
@@ -152,19 +208,8 @@ async function connectToServer(url, code) {
 
     isConnecting = true;
     serverUrl = url.replace(/\/$/, ''); // Remove trailing slash
-    currentSessionCode = code.toUpperCase();
 
     try {
-        // Validate code first
-        const response = await fetch(`${serverUrl}/api/session/validate/${currentSessionCode}`);
-        const data = await response.json();
-        
-        if (!data.valid) {
-            mainWindow.webContents.send('connection-error', 'Invalid code');
-            isConnecting = false;
-            return;
-        }
-
         // Create SignalR connection with longer timeouts for Raspberry Pi
         connection = new signalR.HubConnectionBuilder()
             .withUrl(`${serverUrl}/hub/remoteview`, {
@@ -276,7 +321,7 @@ async function connectToServer(url, code) {
 
         connection.onreconnected(() => {
             mainWindow.webContents.send('reconnected');
-            connection.invoke('ClientJoinSession', currentSessionCode);
+            connection.invoke('ClientJoinSession', currentClientName);
         });
 
         connection.onclose(async (error) => {
@@ -297,11 +342,11 @@ async function connectToServer(url, code) {
         await connection.start();
         console.log('SignalR connection started successfully');
         
-        const success = await connection.invoke('ClientJoinSession', currentSessionCode);
+        const success = await connection.invoke('ClientJoinSession', currentClientName);
 
         if (success) {
             createDisplayWindow();
-            mainWindow.webContents.send('connected', currentSessionCode);
+            mainWindow.webContents.send('connected', currentClientName);
         } else {
             await disconnect();
             mainWindow.webContents.send('connection-error', 'Failed to join session');
@@ -319,7 +364,26 @@ async function connectToServer(url, code) {
             connection = null;
         }
         
-        mainWindow.webContents.send('connection-error', error.message);
+        // Determine if this is a server unreachable error
+        const isServerUnreachable = 
+            error.message.includes('Failed to connect') ||
+            error.message.includes('ECONNREFUSED') ||
+            error.message.includes('ERR_CONNECTION_REFUSED') ||
+            error.message.includes('fetch') ||
+            error.message.includes('NetworkError') ||
+            error.message.includes('Could not connect');
+        
+        if (isServerUnreachable) {
+            // Show error dialog and exit
+            const errorMsg = `Cannot connect to server at ${serverUrl}\n\nPlease ensure:\n1. The server is running\n2. The URL in config.json is correct\n\nThe application will now exit.`;
+            
+            dialog.showErrorBox('Server Connection Failed', errorMsg);
+            console.error('Server unreachable. Exiting application.');
+            app.quit();
+        } else {
+            // For other errors, just notify the UI
+            mainWindow.webContents.send('connection-error', error.message);
+        }
     } finally {
         isConnecting = false;
     }
@@ -327,6 +391,7 @@ async function connectToServer(url, code) {
 
 async function disconnect() {
     isConnecting = false;
+    isDisconnecting = true;
     
     if (connection) {
         try {
@@ -345,11 +410,13 @@ async function disconnect() {
     
     if (displayWindow && !displayWindow.isDestroyed()) {
         console.log('Closing display window');
+        // Remove all listeners before closing to prevent errors
+        displayWindow.removeAllListeners('close');
         displayWindow.close();
         displayWindow = null;
     }
     
-    currentSessionCode = null;
+    isDisconnecting = false;
 }
 
 async function resetToInitialState() {
@@ -372,17 +439,25 @@ async function resetToInitialState() {
 }
 
 // IPC handlers
-ipcMain.handle('connect', async (event, { url, code }) => {
-    await connectToServer(url, code);
+ipcMain.handle('connect', async (event, { url }) => {
+    await connectToServer(url);
 });
 
 ipcMain.handle('disconnect', async () => {
     await disconnect();
+    app.quit();
+});
+
+ipcMain.handle('get-client-name', () => {
+    return currentClientName;
 });
 
 ipcMain.handle('toggle-fullscreen', () => {
-    if (displayWindow) {
+    if (displayWindow && !displayWindow.isDestroyed()) {
         displayWindow.setFullScreen(!displayWindow.isFullScreen());
+    } else {
+        // If display window doesn't exist, create it
+        createDisplayWindow();
     }
 });
 

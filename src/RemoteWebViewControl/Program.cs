@@ -36,16 +36,10 @@ app.UseStaticFiles();
 app.MapHub<RemoteViewHub>("/hub/remoteview");
 
 // API Endpoints
-app.MapPost("/api/session/create", (SessionService sessionService) =>
+app.MapGet("/api/client/exists/{clientName}", (string clientName, SessionService sessionService) =>
 {
-    var code = sessionService.CreateSession();
-    return Results.Ok(new { code });
-});
-
-app.MapGet("/api/session/validate/{code}", (string code, SessionService sessionService) =>
-{
-    var valid = sessionService.ValidateCode(code);
-    return Results.Ok(new { valid });
+    var exists = sessionService.ClientExists(clientName);
+    return Results.Ok(new { exists });
 });
 
 // Admin API Endpoints
@@ -62,9 +56,24 @@ app.MapPost("/api/admin/clear", (SessionService sessionService) =>
 });
 
 // Route redirects for clean URLs
-app.MapGet("/server", () => Results.Redirect("/server.html"));
+app.MapGet("/server/{clientName}", async (string clientName, SessionService sessionService, HttpContext context) =>
+{
+    // Check if client exists
+    if (!sessionService.ClientExists(clientName))
+    {
+        // Redirect to admin page with error message
+        return Results.Redirect($"/admin?error={Uri.EscapeDataString("Client does not exist or is not connected")}");
+    }
+    
+    // Return the server.html file with correct content type
+    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "server.html");
+    var htmlContent = await File.ReadAllTextAsync(filePath);
+    return Results.Content(htmlContent, "text/html");
+});
+
+app.MapGet("/server", () => Results.Redirect("/admin"));
 app.MapGet("/admin", () => Results.Redirect("/admin.html"));
 app.MapGet("/test/mouse-click", () => Results.Redirect("/test/mouse-click.html"));
-app.MapGet("/", () => Results.Redirect("/server.html"));
+app.MapGet("/", () => Results.Redirect("/admin"));
 
 app.Run();
