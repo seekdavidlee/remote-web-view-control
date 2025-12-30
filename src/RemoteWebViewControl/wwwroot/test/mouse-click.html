@@ -38,13 +38,29 @@
             pointer-events: none;
             transform: translate(-50%, -50%);
         }
+
+        .coordinates {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            border-radius: 5px;
+            z-index: 1000;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="title">Test Mouse Click</div>
+    <div class="coordinates" id="coordinates">X: 0, Y: 0</div>
 
     <script>
         let currentDot = null;
+        const coordinatesDisplay = document.getElementById('coordinates');
 
         document.addEventListener('click', function(event) {
             // Remove existing dot if it exists
@@ -59,6 +75,10 @@
             currentDot.style.top = event.pageY + 'px';
             
             document.body.appendChild(currentDot);
+
+            // Update and show coordinates
+            coordinatesDisplay.textContent = `X: ${event.pageX}, Y: ${event.pageY}`;
+            coordinatesDisplay.style.display = 'block';
         });
     </script>
 </body>
