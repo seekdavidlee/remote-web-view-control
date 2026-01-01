@@ -1,3 +1,4 @@
 {
-  "serverUrl": "http://localhost:5261"
+  "serverUrl": "http://localhost:5261",
+  "displayIndex": 0
 }

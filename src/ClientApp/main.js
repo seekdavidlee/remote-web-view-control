@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, session, dialog, screen } = require('electron');
 const path = require('path');
 const signalR = require('@microsoft/signalr');
 const os = require('os');
@@ -76,11 +76,21 @@ function createDisplayWindow() {
         return displayWindow;
     }
 
+    // Get the specified display or default to primary
+    const displays = screen.getAllDisplays();
+    const displayIndex = config.displayIndex !== undefined ? config.displayIndex : 0;
+    const targetDisplay = displays[displayIndex] || screen.getPrimaryDisplay();
+    
+    console.log(`Available displays: ${displays.length}`);
+    console.log(`Using display index ${displayIndex}: ${targetDisplay.bounds.width}x${targetDisplay.bounds.height} at (${targetDisplay.bounds.x}, ${targetDisplay.bounds.y})`);
+
     displayWindow = new BrowserWindow({
         width: 1920,
         height: 1080,
         fullscreen: true,
         autoHideMenuBar: true,
+        x: targetDisplay.bounds.x,
+        y: targetDisplay.bounds.y,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
