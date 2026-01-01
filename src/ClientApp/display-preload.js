@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('displayAPI', {
 // Expose action executor API for notifying when actions are triggered
 contextBridge.exposeInMainWorld('actionExecutorAPI', {
     notifyActionTriggered: (actionId) => ipcRenderer.send('action-triggered', actionId),
-    simulateClick: (x, y) => ipcRenderer.send('simulate-click', x, y)
+    simulateClick: (x, y) => ipcRenderer.send('simulate-click', x, y),
+    simulateKeyPress: (key) => ipcRenderer.send('simulate-keypress', key)
 });

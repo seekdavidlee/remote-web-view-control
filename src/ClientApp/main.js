@@ -338,6 +338,22 @@ async function connectToServer(url) {
             }
         });
 
+        // Handle keyboard simulation from action executor
+        ipcMain.on('simulate-keypress', (event, key) => {
+            console.log(`Simulating key press: ${key}`);
+            if (displayWindow && !displayWindow.isDestroyed()) {
+                displayWindow.webContents.sendInputEvent({
+                    type: 'keyDown',
+                    keyCode: key
+                });
+                displayWindow.webContents.sendInputEvent({
+                    type: 'keyUp',
+                    keyCode: key
+                });
+                console.log(`Key '${key}' simulated successfully`);
+            }
+        });
+
         // Handle actions received from server
         connection.on('ReceiveActions', (actions) => {
             console.log(`Received ${actions.length} actions from server`);

@@ -60,12 +60,19 @@ class ActionExecutor {
     startMonitoring() {
         console.log('[ActionExecutor] Starting DOM monitoring');
         
-        // Create a MutationObserver for each action
+        // Create a MutationObserver for each action with element-based triggers
         this.actions.forEach(action => {
-            this.createObserverForAction(action);
+            if (action.trigger.type === 'immediate') {
+                // Execute immediate actions right away
+                console.log(`[ActionExecutor] Executing immediate action: ${action.name}`);
+                this.executeAction(action, null);
+            } else {
+                // Create observer for element-based triggers
+                this.createObserverForAction(action);
+            }
         });
 
-        // Also check for elements that might already exist in the DOM
+        // Also check for elements that might already exist in the DOM (for element-based triggers)
         this.checkExistingElements();
     }
 
@@ -170,22 +177,27 @@ class ActionExecutor {
     /**
      * Execute an action
      * @param {Object} action - Action to execute
-     * @param {Element} element - Target element
+     * @param {Element} element - Target element (may be null for immediate actions)
      */
     async executeAction(action, element) {
         // Mark as executed to prevent duplicate execution
         this.executedActions.add(action.id);
 
         console.log(`[ActionExecutor] Executing action: ${action.name}`);
-        console.log(`[ActionExecutor] Delay: ${action.action.delaySeconds} seconds`);
+        console.log(`[ActionExecutor] Action object:`, action);
+        console.log(`[ActionExecutor] Action type: ${action.action?.type}`);
+        console.log(`[ActionExecutor] Delay: ${action.action?.delaySeconds} seconds`);
 
         // Apply delay if specified
-        if (action.action.delaySeconds > 0) {
-            await this.delay(action.action.delaySeconds * 1000);
+        const delaySeconds = action.action?.delaySeconds || 0;
+        if (delaySeconds > 0) {
+            console.log(`[ActionExecutor] Waiting ${delaySeconds} seconds...`);
+            await this.delay(delaySeconds * 1000);
+            console.log(`[ActionExecutor] Delay complete, executing now`);
         }
 
         // Execute the action based on type
-        switch (action.action.type) {
+        switch (action.action?.type) {
             case 'click':
                 this.performClick(element, action);
                 break;
@@ -194,8 +206,12 @@ class ActionExecutor {
                 this.performNavigation(action.action.url, action);
                 break;
             
+            case 'script':
+                this.performScript(action.action.script, action);
+                break;
+            
             default:
-                console.warn(`[ActionExecutor] Unknown action type: ${action.action.type}`);
+                console.warn(`[ActionExecutor] Unknown action type: ${action.action?.type}`);
         }
 
         // Notify server that action was triggered
@@ -247,6 +263,45 @@ class ActionExecutor {
             window.location.href = url;
         } catch (error) {
             console.error(`[ActionExecutor] Error navigating to URL:`, error);
+        }
+    }
+
+    /**
+     * Execute a JavaScript script
+     * @param {string} script - Script to execute
+     * @param {Object} action - Action definition
+     */
+    performScript(script, action) {
+        try {
+            console.log(`[ActionExecutor] Executing script for action: ${action.name}`);
+            console.log(`[ActionExecutor] Script to execute:`, script);
+            
+            // Special handling for fullscreen requests
+            if (script.includes('requestFullscreen')) {
+                console.log(`[ActionExecutor] Detected fullscreen request`);
+                this.requestFullscreen();
+            } else {
+                const result = eval(script);
+                console.log(`[ActionExecutor] Script executed successfully, result:`, result);
+            }
+        } catch (error) {
+            console.error(`[ActionExecutor] Error executing script:`, error);
+        }
+    }
+
+    /**
+     * Request fullscreen with multiple fallback methods
+     */
+    requestFullscreen() {
+        console.log(`[ActionExecutor] Requesting fullscreen...`);
+        
+        // Use keyboard simulation to press 'f' key (works for YouTube and most video players)
+        if (window.actionExecutorAPI && window.actionExecutorAPI.simulateKeyPress) {
+            console.log(`[ActionExecutor] Simulating 'f' key press for fullscreen`);
+            window.actionExecutorAPI.simulateKeyPress('f');
+            console.log(`[ActionExecutor] Fullscreen key press sent`);
+        } else {
+            console.error(`[ActionExecutor] actionExecutorAPI.simulateKeyPress not available`);
         }
     }
 

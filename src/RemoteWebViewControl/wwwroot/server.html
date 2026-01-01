@@ -305,25 +305,47 @@
                                             <i class="bi bi-flag-fill me-2"></i>Trigger Configuration
                                         </h6>
 
-                                        <!-- Element Type -->
+                                        <!-- Action Trigger Tiles -->
                                         <div class="mb-3">
-                                            <label for="elementType" class="form-label fw-bold">
-                                                <i class="bi bi-box me-1"></i>Element Type
+                                            <label class="form-label fw-bold">
+                                                <i class="bi bi-lightning-charge me-1"></i>Action Trigger Type
                                             </label>
-                                            <select class="form-select" id="elementType" required>
-                                                <option value="div">Div Element</option>
-                                                <option value="button">Button Element</option>
-                                            </select>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <input type="radio" class="btn-check" name="triggerType" id="triggerNone" value="none">
+                                                <label class="btn btn-outline-primary" for="triggerNone">
+                                                    <i class="bi bi-x-circle me-1"></i>None
+                                                </label>
+                                                
+                                                <input type="radio" class="btn-check" name="triggerType" id="triggerElement" value="element" checked>
+                                                <label class="btn btn-outline-primary" for="triggerElement">
+                                                    <i class="bi bi-square me-1"></i>Element Visible
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">Choose when this action should be triggered</small>
                                         </div>
 
-                                        <!-- Element Selector -->
-                                        <div class="mb-3">
-                                            <label for="elementSelector" class="form-label fw-bold">
-                                                <i class="bi bi-code-square me-1"></i>CSS Selector
-                                            </label>
-                                            <input type="text" class="form-control" id="elementSelector" 
-                                                   placeholder=".play-button, #videoPlayer" required>
-                                            <small class="text-muted">CSS selector to identify the element</small>
+                                        <!-- Element Configuration (shown when Element Visible is selected) -->
+                                        <div id="elementTriggerConfig">
+                                            <!-- Element Type -->
+                                            <div class="mb-3">
+                                                <label for="elementType" class="form-label fw-bold">
+                                                    <i class="bi bi-box me-1"></i>Element Type
+                                                </label>
+                                                <select class="form-select" id="elementType">
+                                                    <option value="div">Div Element</option>
+                                                    <option value="button">Button Element</option>
+                                                </select>
+                                            </div>
+
+                                            <!-- Element Selector -->
+                                            <div class="mb-3">
+                                                <label for="elementSelector" class="form-label fw-bold">
+                                                    <i class="bi bi-code-square me-1"></i>CSS Selector
+                                                </label>
+                                                <input type="text" class="form-control" id="elementSelector" 
+                                                       placeholder=".play-button, #videoPlayer">
+                                                <small class="text-muted">CSS selector to identify the element</small>
+                                            </div>
                                         </div>
 
                                         <hr class="my-3">
@@ -331,46 +353,63 @@
                                             <i class="bi bi-lightning-fill me-2"></i>Action to Execute
                                         </h6>
 
-                                        <!-- Action Type -->
-                                        <div class="mb-3">
-                                            <label for="actionType" class="form-label fw-bold">
-                                                <i class="bi bi-cursor-fill me-1"></i>Action Type
-                                            </label>
-                                            <select class="form-select" id="actionType" required>
-                                                <option value="click">Simulate Mouse Click at Coordinates</option>
-                                                <option value="navigate">Navigate to Different URL</option>
-                                            </select>
-                                            <small class="text-muted">What should happen when the element is detected?</small>
-                                        </div>
-
-                                        <!-- Click Coordinates (conditional) -->
-                                        <div class="mb-3" id="clickCoordinatesContainer">
-                                            <label class="form-label fw-bold">
-                                                <i class="bi bi-cursor-fill me-1"></i>Click Coordinates
-                                            </label>
-                                            <div class="row">
-                                                <div class="col-6">
-                                                    <label for="actionClickX" class="form-label">X:</label>
-                                                    <input type="number" class="form-control" id="actionClickX" 
-                                                           placeholder="100" min="0" value="100">
-                                                </div>
-                                                <div class="col-6">
-                                                    <label for="actionClickY" class="form-label">Y:</label>
-                                                    <input type="number" class="form-control" id="actionClickY" 
-                                                           placeholder="100" min="0" value="100">
-                                                </div>
+                                        <!-- Quick Action Selection (shown when trigger type is "none") -->
+                                        <div id="quickActionSelection" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="quickActionType" class="form-label fw-bold">
+                                                    <i class="bi bi-lightning me-1"></i>Quick Action
+                                                </label>
+                                                <select class="form-select" id="quickActionType">
+                                                    <option value="">Select a quick action...</option>
+                                                    <option value="fullscreen">Full screen</option>
+                                                </select>
+                                                <small class="text-muted">Choose a quick action to execute</small>
                                             </div>
-                                            <small class="text-muted">Pixel coordinates where to click (top-left is 0,0)</small>
                                         </div>
 
-                                        <!-- Navigate URL (conditional) -->
-                                        <div class="mb-3" id="navigateUrlContainer" style="display: none;">
-                                            <label for="navigateUrl" class="form-label fw-bold">
-                                                <i class="bi bi-link-45deg me-1"></i>Navigate To (Destination URL)
-                                            </label>
-                                            <input type="url" class="form-control" id="navigateUrl" 
-                                                   placeholder="https://example.com/next-page">
-                                            <small class="text-muted">The URL to navigate to when the element appears</small>
+                                        <!-- Standard Action Type Selection (shown when trigger type is "element") -->
+                                        <div id="standardActionSelection">
+                                            <!-- Action Type -->
+                                            <div class="mb-3">
+                                                <label for="actionType" class="form-label fw-bold">
+                                                    <i class="bi bi-cursor-fill me-1"></i>Action Type
+                                                </label>
+                                                <select class="form-select" id="actionType">
+                                                    <option value="click">Simulate Mouse Click at Coordinates</option>
+                                                    <option value="navigate">Navigate to Different URL</option>
+                                                </select>
+                                                <small class="text-muted">What should happen when the element is detected?</small>
+                                            </div>
+
+                                            <!-- Click Coordinates (conditional) -->
+                                            <div class="mb-3" id="clickCoordinatesContainer">
+                                                <label class="form-label fw-bold">
+                                                    <i class="bi bi-cursor-fill me-1"></i>Click Coordinates
+                                                </label>
+                                                <div class="row">
+                                                    <div class="col-6">
+                                                        <label for="actionClickX" class="form-label">X:</label>
+                                                        <input type="number" class="form-control" id="actionClickX" 
+                                                               placeholder="100" min="0" value="100">
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label for="actionClickY" class="form-label">Y:</label>
+                                                        <input type="number" class="form-control" id="actionClickY" 
+                                                               placeholder="100" min="0" value="100">
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted">Pixel coordinates where to click (top-left is 0,0)</small>
+                                            </div>
+
+                                            <!-- Navigate URL (conditional) -->
+                                            <div class="mb-3" id="navigateUrlContainer" style="display: none;">
+                                                <label for="navigateUrl" class="form-label fw-bold">
+                                                    <i class="bi bi-link-45deg me-1"></i>Navigate To (Destination URL)
+                                                </label>
+                                                <input type="url" class="form-control" id="navigateUrl" 
+                                                       placeholder="https://example.com/next-page">
+                                                <small class="text-muted">The URL to navigate to when the element appears</small>
+                                            </div>
                                         </div>
 
                                         <!-- Delay -->
@@ -380,18 +419,21 @@
                                             </label>
                                             <div class="input-group">
                                                 <input type="number" class="form-control" id="delaySeconds" 
-                                                       min="0" max="300" value="0">
+                                                       min="0" max="300" step="0.1" value="0">
                                                 <span class="input-group-text">seconds</span>
                                             </div>
-                                            <small class="text-muted">0 = immediate</small>
+                                            <small class="text-muted">0 = immediate, supports decimals (e.g., 1.5)</small>
                                         </div>
 
                                         <!-- Active Status -->
-                                        <div class="mb-3 form-check">
-                                            <input type="checkbox" class="form-check-input" id="isActive" checked>
-                                            <label class="form-check-label fw-bold" for="isActive">
-                                                Action is Active
-                                            </label>
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="isActive" checked>
+                                                <label class="form-check-label" for="isActive">
+                                                    <i class="bi bi-toggle-on me-1"></i>Action is Active
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">Only active actions will be executed on the client</small>
                                         </div>
 
                                         <!-- Submit Buttons -->
@@ -576,6 +618,37 @@
         });
 
         // Action Builder form handlers
+        document.querySelectorAll('input[name="triggerType"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const triggerType = e.target.value;
+                const elementConfig = document.getElementById('elementTriggerConfig');
+                const quickActionSelection = document.getElementById('quickActionSelection');
+                const standardActionSelection = document.getElementById('standardActionSelection');
+                const elementType = document.getElementById('elementType');
+                const elementSelector = document.getElementById('elementSelector');
+                
+                if (triggerType === 'none') {
+                    // Hide element configuration
+                    elementConfig.style.display = 'none';
+                    elementType.required = false;
+                    elementSelector.required = false;
+                    
+                    // Show quick action selection
+                    quickActionSelection.style.display = 'block';
+                    standardActionSelection.style.display = 'none';
+                } else {
+                    // Show element configuration
+                    elementConfig.style.display = 'block';
+                    elementType.required = true;
+                    elementSelector.required = true;
+                    
+                    // Hide quick action selection
+                    quickActionSelection.style.display = 'none';
+                    standardActionSelection.style.display = 'block';
+                }
+            });
+        });
+
         document.getElementById('actionType').addEventListener('change', (e) => {
             const urlContainer = document.getElementById('navigateUrlContainer');
             const urlInput = document.getElementById('navigateUrl');
@@ -666,8 +739,10 @@
         async function saveAction() {
             const clickXValue = document.getElementById('actionClickX').value;
             const clickYValue = document.getElementById('actionClickY').value;
+            const triggerType = document.querySelector('input[name="triggerType"]:checked').value;
             
             console.log('Raw input values - clickX:', clickXValue, 'clickY:', clickYValue);
+            console.log('Trigger type:', triggerType);
             
             const actionData = {
                 name: document.getElementById('actionName').value,
@@ -675,24 +750,35 @@
                 description: document.getElementById('actionDescription').value,
                 isActive: document.getElementById('isActive').checked,
                 trigger: {
-                    type: 'elementVisible',
-                    elementType: document.getElementById('elementType').value,
-                    selector: document.getElementById('elementSelector').value
+                    type: triggerType === 'none' ? 'immediate' : 'elementVisible',
+                    elementType: triggerType === 'element' ? document.getElementById('elementType').value : null,
+                    selector: triggerType === 'element' ? document.getElementById('elementSelector').value : null
                 },
-                action: {
-                    type: document.getElementById('actionType').value,
-                    clickX: document.getElementById('actionType').value === 'click'
-                        ? parseInt(clickXValue)
-                        : null,
-                    clickY: document.getElementById('actionType').value === 'click'
-                        ? parseInt(clickYValue)
-                        : null,
-                    url: document.getElementById('actionType').value === 'navigate' 
-                        ? document.getElementById('navigateUrl').value 
-                        : null,
-                    delaySeconds: parseInt(document.getElementById('delaySeconds').value) || 0
-                }
+                action: {},
+                delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
             };
+            
+            // Handle action based on trigger type
+            if (triggerType === 'none') {
+                const quickAction = document.getElementById('quickActionType').value;
+                if (quickAction === 'fullscreen') {
+                    actionData.action = {
+                        type: 'script',
+                        script: 'document.documentElement.requestFullscreen()',
+                        delaySeconds: actionData.delaySeconds
+                    };
+                }
+            } else {
+                // Standard element-based trigger
+                const actionType = document.getElementById('actionType').value;
+                actionData.action = {
+                    type: actionType,
+                    clickX: actionType === 'click' ? parseInt(clickXValue) : null,
+                    clickY: actionType === 'click' ? parseInt(clickYValue) : null,
+                    url: actionType === 'navigate' ? document.getElementById('navigateUrl').value : null,
+                    delaySeconds: actionData.delaySeconds
+                };
+            }
             
             console.log('Sending action data:', JSON.stringify(actionData, null, 2));
 
@@ -744,27 +830,45 @@
             document.getElementById('actionName').value = action.name;
             document.getElementById('actionTargetUrl').value = action.targetUrl || '';
             document.getElementById('actionDescription').value = action.description || '';
-            document.getElementById('elementType').value = action.trigger.elementType;
-            document.getElementById('elementSelector').value = action.trigger.selector;
-            document.getElementById('actionType').value = action.action.type;
-            document.getElementById('delaySeconds').value = action.action.delaySeconds;
+            document.getElementById('delaySeconds').value = action.action?.delaySeconds || action.delaySeconds || 0;
             document.getElementById('isActive').checked = action.isActive;
             
-            // Set coordinate values explicitly
-            const clickXInput = document.getElementById('actionClickX');
-            const clickYInput = document.getElementById('actionClickY');
-            clickXInput.value = action.action.clickX ?? 100;
-            clickYInput.value = action.action.clickY ?? 100;
+            // Set trigger type
+            const triggerType = action.trigger.type === 'immediate' ? 'none' : 'element';
+            document.getElementById(triggerType === 'none' ? 'triggerNone' : 'triggerElement').checked = true;
             
-            console.log('Set clickX input to:', clickXInput.value, 'clickY input to:', clickYInput.value);
+            // Trigger the change event to show/hide appropriate sections
+            document.querySelector(`input[name="triggerType"]:checked`).dispatchEvent(new Event('change'));
             
-            // Set navigate URL
-            document.getElementById('navigateUrl').value = action.action.url || '';
+            if (triggerType === 'element') {
+                document.getElementById('elementType').value = action.trigger.elementType;
+                document.getElementById('elementSelector').value = action.trigger.selector;
+                document.getElementById('actionType').value = action.action.type;
+                
+                // Set coordinate values explicitly
+                const clickXInput = document.getElementById('actionClickX');
+                const clickYInput = document.getElementById('actionClickY');
+                clickXInput.value = action.action.clickX ?? 100;
+                clickYInput.value = action.action.clickY ?? 100;
+                
+                console.log('Set clickX input to:', clickXInput.value, 'clickY input to:', clickYInput.value);
+                
+                // Set navigate URL
+                document.getElementById('navigateUrl').value = action.action.url || '';
+                
+                // Trigger change event to show/hide appropriate fields
+                document.getElementById('actionType').dispatchEvent(new Event('change'));
+            } else {
+                // Handle immediate/quick action type
+                if (action.action.type === 'script') {
+                    // Determine which quick action this is
+                    if (action.action.script === 'document.documentElement.requestFullscreen()') {
+                        document.getElementById('quickActionType').value = 'fullscreen';
+                    }
+                }
+            }
             
-            // Trigger change event to show/hide appropriate fields
-            document.getElementById('actionType').dispatchEvent(new Event('change'));
-            
-            console.log('After change event - clickX:', clickXInput.value, 'clickY:', clickYInput.value);
+            console.log('After change event - clickX:', document.getElementById('actionClickX').value, 'clickY:', document.getElementById('actionClickY').value);
 
             document.getElementById('actionFormTitle').innerHTML = '<i class="bi bi-pencil me-2"></i>Edit Action';
             document.getElementById('btnSaveText').textContent = 'Update Action';
@@ -823,6 +927,12 @@
             document.getElementById('btnSaveText').textContent = 'Create Action';
             document.getElementById('btnCancelEdit').style.display = 'none';
             editingActionId = null;
+            
+            // Reset trigger type to element visible (default)
+            document.getElementById('triggerElement').checked = true;
+            document.getElementById('elementTriggerConfig').style.display = 'block';
+            document.getElementById('quickActionSelection').style.display = 'none';
+            document.getElementById('standardActionSelection').style.display = 'block';
         }
 
         async function notifyClientOfActions() {
