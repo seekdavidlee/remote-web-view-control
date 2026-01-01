@@ -1,5 +1,6 @@
 using RemoteWebViewControl.Hubs;
 using RemoteWebViewControl.Services;
+using RemoteWebViewControl.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,7 @@ builder.Services.AddSignalR(options =>
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
 });
 builder.Services.AddSingleton<SessionService>();
+builder.Services.AddSingleton<ActionService>();
 
 var app = builder.Build();
 
@@ -53,6 +55,60 @@ app.MapPost("/api/admin/clear", (SessionService sessionService) =>
 {
     sessionService.ClearAllSessions();
     return Results.Ok(new { success = true, message = "All sessions cleared" });
+});
+
+// Action API Endpoints
+app.MapGet("/api/actions/{clientName}", (string clientName, ActionService actionService) =>
+{
+    var actions = actionService.GetActionsForClient(clientName);
+    return Results.Ok(actions);
+});
+
+app.MapGet("/api/actions/{clientName}/active", (string clientName, ActionService actionService) =>
+{
+    var actions = actionService.GetActiveActionsForClient(clientName);
+    return Results.Ok(actions);
+});
+
+app.MapPost("/api/actions/{clientName}", (string clientName, ClientAction action, ActionService actionService) =>
+{
+    action.ClientName = clientName;
+    var created = actionService.CreateAction(action);
+    return Results.Created($"/api/actions/{clientName}/{created.Id}", created);
+});
+
+app.MapPut("/api/actions/{clientName}/{actionId}", (string clientName, string actionId, ClientAction action, ActionService actionService) =>
+{
+    var updated = actionService.UpdateAction(clientName, actionId, action);
+    if (updated)
+    {
+        return Results.Ok(action);
+    }
+    return Results.NotFound(new { error = "Action not found" });
+});
+
+app.MapDelete("/api/actions/{clientName}/{actionId}", (string clientName, string actionId, ActionService actionService) =>
+{
+    var deleted = actionService.DeleteAction(clientName, actionId);
+    if (deleted)
+    {
+        return Results.Ok(new { success = true, message = "Action deleted" });
+    }
+    return Results.NotFound(new { error = "Action not found" });
+});
+
+app.MapPatch("/api/actions/{clientName}/{actionId}/toggle", (string clientName, string actionId, ActionService actionService, HttpRequest request) =>
+{
+    var body = request.ReadFromJsonAsync<Dictionary<string, bool>>().Result;
+    if (body != null && body.TryGetValue("isActive", out var isActive))
+    {
+        var toggled = actionService.ToggleAction(clientName, actionId, isActive);
+        if (toggled)
+        {
+            return Results.Ok(new { success = true, isActive });
+        }
+    }
+    return Results.NotFound(new { error = "Action not found" });
 });
 
 // Route redirects for clean URLs

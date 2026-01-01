@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.SignalR;
 using RemoteWebViewControl.Services;
+using RemoteWebViewControl.Models;
 
 namespace RemoteWebViewControl.Hubs;
 
-public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub> logger) : Hub
+public class RemoteViewHub(SessionService sessionService, ActionService actionService, ILogger<RemoteViewHub> logger) : Hub
 {
     public async Task<bool> ServerJoinSession(string clientName)
     {
@@ -106,6 +107,32 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
 
         await Clients.Client(session.ServerConnectionId).SendAsync("ReceiveDisplayDimensions", width, height);
         logger.LogInformation("Display dimensions sent to server for client {ClientName}: {Width}x{Height}", clientName, width, height);
+    }
+
+    public async Task SendActionsToClient(string clientName)
+    {
+        var session = sessionService.GetSession(clientName);
+        if (session == null || string.IsNullOrEmpty(session.ClientConnectionId))
+        {
+            logger.LogWarning("Cannot send actions - no client connected for: {ClientName}", clientName);
+            return;
+        }
+
+        var actions = actionService.GetActiveActionsForClient(clientName);
+        await Clients.Client(session.ClientConnectionId).SendAsync("ReceiveActions", actions);
+        logger.LogInformation("Sent {Count} actions to client {ClientName}", actions.Count(), clientName);
+    }
+
+    public async Task ActionTriggered(string clientName, string actionId)
+    {
+        actionService.RecordActionTriggered(clientName, actionId);
+        
+        var session = sessionService.GetSession(clientName);
+        if (session != null && !string.IsNullOrEmpty(session.ServerConnectionId))
+        {
+            await Clients.Client(session.ServerConnectionId).SendAsync("ActionWasTriggered", actionId, DateTime.UtcNow);
+            logger.LogInformation("Notified server that action {ActionId} was triggered for client {ClientName}", actionId, clientName);
+        }
     }
 
     public async Task ClearAllSessions()

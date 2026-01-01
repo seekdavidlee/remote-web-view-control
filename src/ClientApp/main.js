@@ -101,7 +101,7 @@ function createDisplayWindow() {
         return true;
     });
 
-    // Enable HTML5 fullscreen API for embedded content (like YouTube videos)
+    // Enable HTML5 fullscreen API for embedded content
     displayWindow.webContents.on('enter-html-full-screen', () => {
         displayWindow.setFullScreen(true);
     });
@@ -144,6 +144,9 @@ function createDisplayWindow() {
             connection.invoke('SendDisplayDimensions', currentClientName, bounds.width, bounds.height)
                 .catch(err => console.error('Error sending display dimensions:', err));
         }
+        
+        // Inject action executor script
+        injectActionExecutor();
     });
 
     // Update dimensions on resize
@@ -157,6 +160,29 @@ function createDisplayWindow() {
     });
 
     return displayWindow;
+}
+
+// Inject action executor script into display window
+async function injectActionExecutor() {
+    if (!displayWindow || displayWindow.isDestroyed()) {
+        return;
+    }
+
+    try {
+        // Read and inject the action executor script
+        const actionExecutorPath = path.join(__dirname, 'action-executor.js');
+        const actionExecutorScript = fs.readFileSync(actionExecutorPath, 'utf8');
+        
+        await displayWindow.webContents.executeJavaScript(actionExecutorScript);
+        console.log('Action executor injected into display window');
+        
+        // Request actions from server after injecting the script
+        if (connection && currentClientName) {
+            await connection.invoke('SendActionsToClient', currentClientName);
+        }
+    } catch (error) {
+        console.error('Error injecting action executor:', error);
+    }
 }
 
 // Store original console methods before overriding
@@ -299,6 +325,19 @@ async function connectToServer(url) {
                 
                 console.log('Mouse click simulated successfully');
                 mainWindow.webContents.send('click-simulated', { x, y });
+            }
+        });
+
+        // Handle actions received from server
+        connection.on('ReceiveActions', (actions) => {
+            console.log(`Received ${actions.length} actions from server`);
+            if (displayWindow && !displayWindow.isDestroyed()) {
+                displayWindow.webContents.executeJavaScript(`
+                    if (window.actionExecutor) {
+                        window.actionExecutor.loadActions(${JSON.stringify(actions)});
+                        window.actionExecutor.enable();
+                    }
+                `).catch(err => console.error('Error loading actions:', err));
             }
         });
 
@@ -458,6 +497,41 @@ ipcMain.handle('toggle-fullscreen', () => {
     } else {
         // If display window doesn't exist, create it
         createDisplayWindow();
+    }
+});
+
+// Handle action triggered notification from display window
+ipcMain.on('action-triggered', (event, actionId) => {
+    console.log(`Action triggered: ${actionId}`);
+    if (connection && currentClientName) {
+        connection.invoke('ActionTriggered', currentClientName, actionId)
+            .catch(err => console.error('Error notifying action triggered:', err));
+    }
+});
+
+// Handle simulate click from action executor
+ipcMain.on('simulate-click', (event, x, y) => {
+    console.log(`Action requesting mouse click at (${x}, ${y})`);
+    if (displayWindow && !displayWindow.isDestroyed()) {
+        // Send mouseDown event
+        displayWindow.webContents.sendInputEvent({
+            type: 'mouseDown',
+            x: x,
+            y: y,
+            button: 'left',
+            clickCount: 1
+        });
+        
+        // Send mouseUp event to complete the click
+        displayWindow.webContents.sendInputEvent({
+            type: 'mouseUp',
+            x: x,
+            y: y,
+            button: 'left',
+            clickCount: 1
+        });
+        
+        console.log('Mouse click simulated successfully from action');
     }
 });
 

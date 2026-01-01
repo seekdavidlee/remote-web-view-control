@@ -1,4 +1,9 @@
-# C# .NET Coding Conventions
+---
+applyTo: "**/*.cs"
+name: "C# Rules"
+description: "C# coding standards"
+---
+# C# Guidelines
 
 ## .NET Version
 
