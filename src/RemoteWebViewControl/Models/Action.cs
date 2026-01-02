@@ -32,7 +32,7 @@ public class ClientAction
     public string Description { get; set; } = string.Empty;
     public string TargetUrl { get; set; } = string.Empty; // URL where this action applies
     public bool IsActive { get; set; } = true;
-    public List<ActionStep> Actions { get; set; } = new(); // Array of sequential action steps
+    public List<ActionStep> Actions { get; set; } = []; // Array of sequential action steps
     
     // Deprecated - kept for backward compatibility
     public ActionTrigger? Trigger { get; set; }
