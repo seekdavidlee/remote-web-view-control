@@ -264,6 +264,7 @@
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title" id="actionBuilderModalLabel">
                         <span id="actionFormTitle"><i class="bi bi-plus-circle me-2"></i>Create New Action</span>
+                        <small class="ms-2" id="stepCounter" style="display: none;"></small>
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -345,6 +346,19 @@
                                                 <input type="text" class="form-control" id="elementSelector" 
                                                        placeholder=".play-button, #videoPlayer">
                                                 <small class="text-muted">CSS selector to identify the element</small>
+                                            </div>
+
+                                            <!-- Timeout -->
+                                            <div class="mb-3">
+                                                <label for="timeoutSeconds" class="form-label fw-bold">
+                                                    <i class="bi bi-hourglass me-1"></i>Timeout
+                                                </label>
+                                                <div class="input-group">
+                                                    <input type="number" class="form-control" id="timeoutSeconds" 
+                                                           min="0" max="300" step="0.1" value="0">
+                                                    <span class="input-group-text">seconds</span>
+                                                </div>
+                                                <small class="text-muted">0 = infinite wait (no timeout), &gt;0 = execute next action on timeout</small>
                                             </div>
                                         </div>
 
@@ -437,6 +451,18 @@
                                         </div>
 
                                         <!-- Submit Buttons -->
+                                        <div class="d-flex gap-2 mb-3">
+                                            <button type="button" class="btn btn-outline-secondary" id="btnPrevAction" disabled title="Edit previous action in chain">
+                                                <i class="bi bi-arrow-left me-1"></i>Previous
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" id="btnNextAction" disabled title="Edit next action in chain">
+                                                Next<i class="bi bi-arrow-right ms-1"></i>
+                                            </button>
+                                            <div class="flex-grow-1"></div>
+                                            <button type="button" class="btn btn-outline-info" id="btnAddStep">
+                                                <i class="bi bi-plus-circle me-1"></i>Add Step
+                                            </button>
+                                        </div>
                                         <div class="d-grid gap-2">
                                             <button type="submit" class="btn btn-primary" id="btnSaveAction">
                                                 <i class="bi bi-check-circle me-2"></i>
@@ -487,6 +513,7 @@
         // Action Builder variables
         let allActions = [];
         let editingActionId = null;
+        let currentStepIndex = 0; // Current step being edited in the Actions array
         let actionBuilderModal = null;
         let deleteActionModal = null;
         let actionToDelete = null;
@@ -566,8 +593,40 @@
             if (!actionBuilderModal) {
                 actionBuilderModal = new bootstrap.Modal(document.getElementById('actionBuilderModal'));
             }
-            editAction(actionId);
+            editAction(actionId, 0); // Start at first step
             actionBuilderModal.show();
+        });
+        
+        // Add Step button
+        document.getElementById('btnAddStep').addEventListener('click', async () => {
+            await addStep();
+        });
+        
+        // Previous Step button
+        document.getElementById('btnPrevAction').addEventListener('click', () => {
+            if (editingActionId && currentStepIndex > 0) {
+                currentStepIndex--;
+                editAction(editingActionId, currentStepIndex);
+            }
+        });
+        
+        // Next Step button
+        document.getElementById('btnNextAction').addEventListener('click', () => {
+            if (editingActionId) {
+                const action = allActions.find(a => a.id === editingActionId);
+                if (action && action.actions && currentStepIndex < action.actions.length - 1) {
+                    currentStepIndex++;
+                    editAction(editingActionId, currentStepIndex);
+                }
+            }
+        });
+        
+        // Cancel Edit button
+        document.getElementById('btnCancelEdit').addEventListener('click', () => {
+            resetActionForm();
+            if (actionBuilderModal) {
+                actionBuilderModal.hide();
+            }
         });
 
         // Delete Action button
@@ -675,13 +734,6 @@
             e.preventDefault();
             await saveAction();
         });
-
-        document.getElementById('btnCancelEdit').addEventListener('click', () => {
-            resetActionForm();
-            if (actionBuilderModal) {
-                actionBuilderModal.hide();
-            }
-        });
         
         // Reset form when modal is closed
         document.getElementById('actionBuilderModal').addEventListener('hidden.bs.modal', () => {
@@ -736,50 +788,73 @@
             // Actions are now managed through the dropdown and action buttons
         }
 
-        async function saveAction() {
+        async function saveAction(closeModal = true) {
             const clickXValue = document.getElementById('actionClickX').value;
             const clickYValue = document.getElementById('actionClickY').value;
             const triggerType = document.querySelector('input[name="triggerType"]:checked').value;
             
-            console.log('Raw input values - clickX:', clickXValue, 'clickY:', clickYValue);
-            console.log('Trigger type:', triggerType);
-            
-            const actionData = {
-                name: document.getElementById('actionName').value,
-                targetUrl: document.getElementById('actionTargetUrl').value,
-                description: document.getElementById('actionDescription').value,
-                isActive: document.getElementById('isActive').checked,
+            // Build the current step
+            const currentStep = {
                 trigger: {
                     type: triggerType === 'none' ? 'immediate' : 'elementVisible',
                     elementType: triggerType === 'element' ? document.getElementById('elementType').value : null,
-                    selector: triggerType === 'element' ? document.getElementById('elementSelector').value : null
+                    selector: triggerType === 'element' ? document.getElementById('elementSelector').value : null,
+                    timeoutSeconds: triggerType === 'element' ? (parseFloat(document.getElementById('timeoutSeconds').value) || 0) : 0
                 },
-                action: {},
-                delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
+                action: {}
             };
             
             // Handle action based on trigger type
             if (triggerType === 'none') {
                 const quickAction = document.getElementById('quickActionType').value;
                 if (quickAction === 'fullscreen') {
-                    actionData.action = {
+                    currentStep.action = {
                         type: 'script',
                         script: 'document.documentElement.requestFullscreen()',
-                        delaySeconds: actionData.delaySeconds
+                        delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
                     };
                 }
             } else {
-                // Standard element-based trigger
                 const actionType = document.getElementById('actionType').value;
-                actionData.action = {
+                currentStep.action = {
                     type: actionType,
                     clickX: actionType === 'click' ? parseInt(clickXValue) : null,
                     clickY: actionType === 'click' ? parseInt(clickYValue) : null,
                     url: actionType === 'navigate' ? document.getElementById('navigateUrl').value : null,
-                    delaySeconds: actionData.delaySeconds
+                    delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
                 };
             }
             
+            let actionData;
+            
+            if (editingActionId) {
+                // Editing existing action - update the step at currentStepIndex
+                const existingAction = allActions.find(a => a.id === editingActionId);
+                actionData = {
+                    name: document.getElementById('actionName').value,
+                    targetUrl: document.getElementById('actionTargetUrl').value,
+                    description: document.getElementById('actionDescription').value,
+                    isActive: document.getElementById('isActive').checked,
+                    actions: existingAction?.actions || []
+                };
+                
+                // Update or add the step
+                if (currentStepIndex < actionData.actions.length) {
+                    actionData.actions[currentStepIndex] = currentStep;
+                } else {
+                    actionData.actions.push(currentStep);
+                }
+            } else {
+                // Creating new action
+                actionData = {
+                    name: document.getElementById('actionName').value,
+                    targetUrl: document.getElementById('actionTargetUrl').value,
+                    description: document.getElementById('actionDescription').value,
+                    isActive: document.getElementById('isActive').checked,
+                    actions: [currentStep]
+                };
+            }
+
             console.log('Sending action data:', JSON.stringify(actionData, null, 2));
 
             try {
@@ -799,14 +874,19 @@
                 }
 
                 if (response.ok) {
+                    const savedAction = await response.json();
+                    editingActionId = savedAction.id; // Update in case it was a new action
+                    
                     await loadActions();
                     await notifyClientOfActions();
-                    resetActionForm();
                     populateActionDropdown();
                     showConfirmation('Action saved successfully!');
                     
-                    // Close the modal
-                    if (actionBuilderModal) {
+                    // Update navigation buttons
+                    updateNavigationButtons();
+                    
+                    // Close the modal only if requested
+                    if (closeModal && actionBuilderModal) {
                         actionBuilderModal.hide();
                     }
                 } else {
@@ -818,61 +898,69 @@
             }
         }
 
-        function editAction(actionId) {
+        function editAction(actionId, stepIndex = 0) {
             const action = allActions.find(a => a.id === actionId);
             if (!action) return;
 
-            console.log('Editing action:', action);
-            console.log('ClickX:', action.action.clickX, 'ClickY:', action.action.clickY);
+            console.log('Editing action:', action, 'Step:', stepIndex);
 
             editingActionId = actionId;
+            currentStepIndex = stepIndex;
 
+            // Set top-level action properties
             document.getElementById('actionName').value = action.name;
             document.getElementById('actionTargetUrl').value = action.targetUrl || '';
             document.getElementById('actionDescription').value = action.description || '';
-            document.getElementById('delaySeconds').value = action.action?.delaySeconds || action.delaySeconds || 0;
             document.getElementById('isActive').checked = action.isActive;
             
-            // Set trigger type
-            const triggerType = action.trigger.type === 'immediate' ? 'none' : 'element';
-            document.getElementById(triggerType === 'none' ? 'triggerNone' : 'triggerElement').checked = true;
-            
-            // Trigger the change event to show/hide appropriate sections
-            document.querySelector(`input[name="triggerType"]:checked`).dispatchEvent(new Event('change'));
-            
-            if (triggerType === 'element') {
-                document.getElementById('elementType').value = action.trigger.elementType;
-                document.getElementById('elementSelector').value = action.trigger.selector;
-                document.getElementById('actionType').value = action.action.type;
-                
-                // Set coordinate values explicitly
-                const clickXInput = document.getElementById('actionClickX');
-                const clickYInput = document.getElementById('actionClickY');
-                clickXInput.value = action.action.clickX ?? 100;
-                clickYInput.value = action.action.clickY ?? 100;
-                
-                console.log('Set clickX input to:', clickXInput.value, 'clickY input to:', clickYInput.value);
-                
-                // Set navigate URL
-                document.getElementById('navigateUrl').value = action.action.url || '';
-                
-                // Trigger change event to show/hide appropriate fields
-                document.getElementById('actionType').dispatchEvent(new Event('change'));
+            // Get the step to edit (or use legacy format)
+            let step;
+            if (action.actions && action.actions.length > 0) {
+                step = action.actions[stepIndex] || action.actions[0];
+            } else if (action.trigger && action.action) {
+                // Legacy format
+                step = {
+                    trigger: action.trigger,
+                    action: action.action
+                };
             } else {
-                // Handle immediate/quick action type
-                if (action.action.type === 'script') {
-                    // Determine which quick action this is
-                    if (action.action.script === 'document.documentElement.requestFullscreen()') {
-                        document.getElementById('quickActionType').value = 'fullscreen';
-                    }
-                }
+                console.error('No action steps found');
+                return;
             }
             
-            console.log('After change event - clickX:', document.getElementById('actionClickX').value, 'clickY:', document.getElementById('actionClickY').value);
+            // Set trigger and action from the step
+            const triggerType = step.trigger.type === 'immediate' ? 'none' : 'element';
+            document.getElementById(triggerType === 'none' ? 'triggerNone' : 'triggerElement').checked = true;
+            document.querySelector(`input[name="triggerType"]:checked`).dispatchEvent(new Event('change'));
+            
+            document.getElementById('timeoutSeconds').value = step.trigger?.timeoutSeconds || 0;
+            document.getElementById('delaySeconds').value = step.action?.delaySeconds || 0;
+            
+            if (triggerType === 'element') {
+                document.getElementById('elementType').value = step.trigger.elementType || 'div';
+                document.getElementById('elementSelector').value = step.trigger.selector || '';
+                document.getElementById('actionType').value = step.action.type;
+                
+                const clickXInput = document.getElementById('actionClickX');
+                const clickYInput = document.getElementById('actionClickY');
+                clickXInput.value = step.action.clickX ?? 100;
+                clickYInput.value = step.action.clickY ?? 100;
+                
+                document.getElementById('navigateUrl').value = step.action.url || '';
+                document.getElementById('actionType').dispatchEvent(new Event('change'));
+            } else {
+                if (step.action.type === 'script' && step.action.script === 'document.documentElement.requestFullscreen()') {
+                    document.getElementById('quickActionType').value = 'fullscreen';
+                }
+            }
 
             document.getElementById('actionFormTitle').innerHTML = '<i class="bi bi-pencil me-2"></i>Edit Action';
-            document.getElementById('btnSaveText').textContent = 'Update Action';
+            document.getElementById('btnSaveText').textContent = 'Save Step';
             document.getElementById('btnCancelEdit').style.display = 'block';
+            
+            // Update step counter and navigation
+            updateStepCounter();
+            updateNavigationButtons();
         }
 
         async function toggleAction(actionId, isActive) {
@@ -927,12 +1015,110 @@
             document.getElementById('btnSaveText').textContent = 'Create Action';
             document.getElementById('btnCancelEdit').style.display = 'none';
             editingActionId = null;
+            currentStepIndex = 0;
+            window.chainFromActionId = null;
+            
+            // Unlock target URL field
+            document.getElementById('actionTargetUrl').readOnly = false;
+            document.getElementById('actionTargetUrl').classList.remove('bg-light');
             
             // Reset trigger type to element visible (default)
             document.getElementById('triggerElement').checked = true;
             document.getElementById('elementTriggerConfig').style.display = 'block';
             document.getElementById('quickActionSelection').style.display = 'none';
             document.getElementById('standardActionSelection').style.display = 'block';
+            
+            // Reset timeout
+            document.getElementById('timeoutSeconds').value = 0;
+            
+            // Reset navigation buttons and counter
+            document.getElementById('btnPrevAction').disabled = true;
+            document.getElementById('btnNextAction').disabled = true;
+            document.getElementById('stepCounter').style.display = 'none';
+        }
+        
+        // Update step counter display
+        function updateStepCounter() {
+            const counter = document.getElementById('stepCounter');
+            if (!editingActionId) {
+                counter.style.display = 'none';
+                return;
+            }
+            
+            const action = allActions.find(a => a.id === editingActionId);
+            if (action && action.actions && action.actions.length > 0) {
+                counter.textContent = `(Step ${currentStepIndex + 1} of ${action.actions.length})`;
+                counter.style.display = 'inline';
+            } else {
+                counter.style.display = 'none';
+            }
+        }
+        
+        // Update navigation buttons based on current step
+        function updateNavigationButtons() {
+            if (!editingActionId) {
+                document.getElementById('btnPrevAction').disabled = true;
+                document.getElementById('btnNextAction').disabled = true;
+                return;
+            }
+            
+            const action = allActions.find(a => a.id === editingActionId);
+            if (!action || !action.actions || action.actions.length === 0) {
+                document.getElementById('btnPrevAction').disabled = true;
+                document.getElementById('btnNextAction').disabled = true;
+                return;
+            }
+            
+            // Enable/disable Previous button
+            const btnPrev = document.getElementById('btnPrevAction');
+            btnPrev.disabled = currentStepIndex === 0;
+            
+            // Enable/disable Next button
+            const btnNext = document.getElementById('btnNextAction');
+            btnNext.disabled = currentStepIndex >= action.actions.length - 1;
+        }
+        
+        // Add a new step to the current action
+        async function addStep() {
+            // Validate that we have at least basic info
+            const actionName = document.getElementById('actionName').value;
+            const targetUrl = document.getElementById('actionTargetUrl').value;
+            
+            if (!actionName || !targetUrl) {
+                alert('Please fill in Action Name and Target URL first.');
+                return;
+            }
+            
+            // Save current step first (this will create the action if it's new) - but don't close modal
+            await saveAction(false);
+            
+            // Move to new step (next index)
+            const action = allActions.find(a => a.id === editingActionId);
+            currentStepIndex = action && action.actions ? action.actions.length : 0;
+            
+            // Clear the form for new step (but keep action name/url/description)
+            const name = document.getElementById('actionName').value;
+            const url = document.getElementById('actionTargetUrl').value;
+            const desc = document.getElementById('actionDescription').value;
+            const isActive = document.getElementById('isActive').checked;
+            
+            document.getElementById('actionForm').reset();
+            
+            document.getElementById('actionName').value = name;
+            document.getElementById('actionTargetUrl').value = url;
+            document.getElementById('actionDescription').value = desc;
+            document.getElementById('isActive').checked = isActive;
+            
+            // Reset to defaults
+            document.getElementById('triggerElement').checked = true;
+            document.querySelector('input[name="triggerType"]:checked').dispatchEvent(new Event('change'));
+            document.getElementById('timeoutSeconds').value = 0;
+            document.getElementById('delaySeconds').value = 0;
+            
+            document.getElementById('btnSaveText').textContent = 'Save Step';
+            
+            updateStepCounter();
+            updateNavigationButtons();
         }
 
         async function notifyClientOfActions() {

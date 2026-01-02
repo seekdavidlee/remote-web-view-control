@@ -357,13 +357,24 @@ async function connectToServer(url) {
         // Handle actions received from server
         connection.on('ReceiveActions', (actions) => {
             console.log(`Received ${actions.length} actions from server`);
+            console.log('Actions data:', JSON.stringify(actions, null, 2));
             if (displayWindow && !displayWindow.isDestroyed()) {
                 displayWindow.webContents.executeJavaScript(`
-                    if (window.actionExecutor) {
-                        window.actionExecutor.loadActions(${JSON.stringify(actions)});
-                        window.actionExecutor.enable();
+                    try {
+                        if (window.actionExecutor) {
+                            window.actionExecutor.loadActions(${JSON.stringify(actions)});
+                            window.actionExecutor.enable();
+                            console.log('[Main] Actions loaded and enabled successfully');
+                        } else {
+                            console.error('[Main] actionExecutor not available on window');
+                        }
+                    } catch (error) {
+                        console.error('[Main] Error in loadActions:', error.message, error.stack);
                     }
-                `).catch(err => console.error('Error loading actions:', err));
+                `).catch(err => {
+                    console.error('Error loading actions:', err.message || err);
+                    console.error('Error details:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+                });
             }
         });
 

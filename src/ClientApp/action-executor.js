@@ -9,6 +9,7 @@ class ActionExecutor {
         this.actions = [];
         this.observers = new Map();
         this.executedActions = new Set();
+        this.timeouts = new Map(); // Track timeout timers for actions
         this.isEnabled = false;
     }
 
@@ -17,22 +18,30 @@ class ActionExecutor {
      * @param {Array} actions - Array of action definitions from server
      */
     loadActions(actions) {
-        console.log('[ActionExecutor] Loading actions:', actions);
-        
-        // Stop existing observers
-        this.stopAllObservers();
-        
-        // Reset executed actions when loading new set
-        this.executedActions.clear();
-        
-        // Store active actions only
-        this.actions = actions.filter(action => action.isActive);
-        
-        console.log(`[ActionExecutor] Loaded ${this.actions.length} active actions`);
-        
-        // Start monitoring if enabled
-        if (this.isEnabled && this.actions.length > 0) {
-            this.startMonitoring();
+        try {
+            console.log('[ActionExecutor] Loading actions:', actions);
+            
+            // Stop existing observers
+            this.stopAllObservers();
+            
+            // Clear all timeouts
+            this.clearAllTimeouts();
+            
+            // Reset executed actions when loading new set
+            this.executedActions.clear();
+            
+            // Store active actions only
+            this.actions = actions.filter(action => action.isActive);
+            
+            console.log(`[ActionExecutor] Loaded ${this.actions.length} active actions`);
+            
+            // Start monitoring if enabled
+            if (this.isEnabled && this.actions.length > 0) {
+                this.startMonitoring();
+            }
+        } catch (error) {
+            console.error('[ActionExecutor] Error in loadActions:', error);
+            throw error;
         }
     }
 
@@ -52,6 +61,7 @@ class ActionExecutor {
     disable() {
         this.isEnabled = false;
         this.stopAllObservers();
+        this.clearAllTimeouts();
     }
 
     /**
@@ -60,20 +70,50 @@ class ActionExecutor {
     startMonitoring() {
         console.log('[ActionExecutor] Starting DOM monitoring');
         
-        // Create a MutationObserver for each action with element-based triggers
+        // For each action, start with the first action step
         this.actions.forEach(action => {
-            if (action.trigger.type === 'immediate') {
-                // Execute immediate actions right away
-                console.log(`[ActionExecutor] Executing immediate action: ${action.name}`);
-                this.executeAction(action, null);
-            } else {
-                // Create observer for element-based triggers
-                this.createObserverForAction(action);
+            if (action.actions && action.actions.length > 0) {
+                // New format: array of action steps
+                console.log(`[ActionExecutor] Processing action: ${action.name} with ${action.actions.length} steps`);
+                this.executeActionStep(action, 0);
+            } else if (action.trigger) {
+                // Legacy format: single trigger/action
+                if (action.trigger.type === 'immediate') {
+                    console.log(`[ActionExecutor] Executing immediate action: ${action.name}`);
+                    this.executeAction(action, null);
+                } else {
+                    this.createObserverForAction(action);
+                }
             }
         });
 
-        // Also check for elements that might already exist in the DOM (for element-based triggers)
+        // Also check for elements that might already exist in the DOM (for legacy format)
         this.checkExistingElements();
+    }
+    
+    /**
+     * Execute a specific step in an action's sequence
+     * @param {Object} action - The parent action object
+     * @param {number} stepIndex - Index of the step to execute
+     */
+    executeActionStep(action, stepIndex) {
+        if (!action.actions || stepIndex >= action.actions.length) {
+            console.log(`[ActionExecutor] Completed all steps for action: ${action.name}`);
+            return;
+        }
+        
+        const step = action.actions[stepIndex];
+        const stepKey = `${action.id}-${stepIndex}`;
+        
+        console.log(`[ActionExecutor] Executing step ${stepIndex + 1}/${action.actions.length} for action: ${action.name}`);
+        
+        if (step.trigger.type === 'immediate') {
+            // Execute immediately and move to next step
+            this.performActionStep(action, stepIndex);
+        } else {
+            // Monitor for element
+            this.createObserverForActionStep(action, stepIndex);
+        }
     }
 
     /**
@@ -84,13 +124,161 @@ class ActionExecutor {
             const element = this.findElement(action.trigger);
             if (element && this.isElementVisible(element)) {
                 console.log(`[ActionExecutor] Element already exists and is visible for action: ${action.name}`);
+                // Clear timeout since element was found
+                this.clearTimeout(action.id);
                 this.executeAction(action, element);
             }
         });
     }
 
     /**
-     * Create a MutationObserver for a specific action
+     * Create a MutationObserver for a specific action step
+     * @param {Object} action - Parent action object
+     * @param {number} stepIndex - Index of the step
+     */
+    createObserverForActionStep(action, stepIndex) {
+        const step = action.actions[stepIndex];
+        const stepKey = `${action.id}-${stepIndex}`;
+        
+        // Don't create duplicate observers
+        if (this.observers.has(stepKey)) {
+            return;
+        }
+
+        const observer = new MutationObserver((mutations) => {
+            // Only process if this step hasn't been executed yet
+            if (this.executedActions.has(stepKey)) {
+                return;
+            }
+
+            const element = this.findElement(step.trigger);
+            if (element && this.isElementVisible(element)) {
+                console.log(`[ActionExecutor] Element became visible for step ${stepIndex + 1} of action: ${action.name}`);
+                // Clear timeout since element was found
+                this.clearTimeout(stepKey);
+                this.performActionStep(action, stepIndex);
+            }
+        });
+
+        // Observe the entire document for changes
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class', 'hidden']
+        });
+
+        this.observers.set(stepKey, observer);
+        console.log(`[ActionExecutor] Created observer for step ${stepIndex + 1} of action: ${action.name}`);
+        
+        // Set up timeout if specified (and not 0 which means infinite wait)
+        const timeoutSeconds = step.trigger?.timeoutSeconds || 0;
+        if (timeoutSeconds > 0) {
+            console.log(`[ActionExecutor] Setting timeout of ${timeoutSeconds} seconds for step ${stepIndex + 1}`);
+            const timeoutId = setTimeout(() => {
+                this.handleStepTimeout(action, stepIndex);
+            }, timeoutSeconds * 1000);
+            this.timeouts.set(stepKey, timeoutId);
+        } else {
+            console.log(`[ActionExecutor] No timeout set for step ${stepIndex + 1} (infinite wait)`);
+        }
+        
+        // Check if element already exists
+        const element = this.findElement(step.trigger);
+        if (element && this.isElementVisible(element)) {
+            console.log(`[ActionExecutor] Element already exists for step ${stepIndex + 1}`);
+            this.clearTimeout(stepKey);
+            this.performActionStep(action, stepIndex);
+        }
+    }
+    
+    /**
+     * Perform an action step and move to the next
+     * @param {Object} action - Parent action object
+     * @param {number} stepIndex - Index of the step to perform
+     */
+    async performActionStep(action, stepIndex) {
+        const step = action.actions[stepIndex];
+        const stepKey = `${action.id}-${stepIndex}`;
+        
+        // Mark as executed
+        this.executedActions.add(stepKey);
+        
+        // Clear timeout
+        this.clearTimeout(stepKey);
+        
+        // Stop observing
+        if (this.observers.has(stepKey)) {
+            this.observers.get(stepKey).disconnect();
+            this.observers.delete(stepKey);
+        }
+        
+        console.log(`[ActionExecutor] Performing step ${stepIndex + 1}/${action.actions.length} for action: ${action.name}`);
+        
+        // Apply delay if specified
+        const delaySeconds = step.action?.delaySeconds || 0;
+        if (delaySeconds > 0) {
+            console.log(`[ActionExecutor] Waiting ${delaySeconds} seconds...`);
+            await this.delay(delaySeconds * 1000);
+        }
+        
+        // Execute the action
+        switch (step.action?.type) {
+            case 'click':
+                this.performClick(null, { action: step.action, name: `${action.name} - Step ${stepIndex + 1}` });
+                break;
+            case 'navigate':
+                this.performNavigation(step.action.url, { name: `${action.name} - Step ${stepIndex + 1}` });
+                break;
+            case 'script':
+                this.performScript(step.action.script, { name: `${action.name} - Step ${stepIndex + 1}` });
+                break;
+            default:
+                console.warn(`[ActionExecutor] Unknown action type: ${step.action?.type}`);
+        }
+        
+        // Move to next step
+        const nextStepIndex = stepIndex + 1;
+        if (nextStepIndex < action.actions.length) {
+            console.log(`[ActionExecutor] Moving to step ${nextStepIndex + 1} of action: ${action.name}`);
+            this.executeActionStep(action, nextStepIndex);
+        } else {
+            console.log(`[ActionExecutor] Completed all steps for action: ${action.name}`);
+            // Notify server that entire action was triggered
+            this.notifyActionTriggered(action.id);
+        }
+    }
+    
+    /**
+     * Handle timeout for an action step
+     * @param {Object} action - Parent action object
+     * @param {number} stepIndex - Index of the step that timed out
+     */
+    handleStepTimeout(action, stepIndex) {
+        const stepKey = `${action.id}-${stepIndex}`;
+        console.log(`[ActionExecutor] Timeout occurred for step ${stepIndex + 1} of action: ${action.name}`);
+        
+        // Mark as executed to prevent it from executing later
+        this.executedActions.add(stepKey);
+        
+        // Stop observing for this step
+        if (this.observers.has(stepKey)) {
+            this.observers.get(stepKey).disconnect();
+            this.observers.delete(stepKey);
+        }
+        
+        // Move to next step on timeout
+        const nextStepIndex = stepIndex + 1;
+        if (nextStepIndex < action.actions.length) {
+            console.log(`[ActionExecutor] Timeout - moving to step ${nextStepIndex + 1} of action: ${action.name}`);
+            this.executeActionStep(action, nextStepIndex);
+        } else {
+            console.log(`[ActionExecutor] Timeout - no more steps for action: ${action.name}`);
+        }
+    }
+    
+    /**
+     * Create a MutationObserver for a specific action (legacy format)
      * @param {Object} action - Action definition
      */
     createObserverForAction(action) {
@@ -108,6 +296,8 @@ class ActionExecutor {
             const element = this.findElement(action.trigger);
             if (element && this.isElementVisible(element)) {
                 console.log(`[ActionExecutor] Element became visible for action: ${action.name}`);
+                // Clear timeout since element was found
+                this.clearTimeout(action.id);
                 this.executeAction(action, element);
             }
         });
@@ -122,6 +312,18 @@ class ActionExecutor {
 
         this.observers.set(action.id, observer);
         console.log(`[ActionExecutor] Created observer for action: ${action.name}`);
+        
+        // Set up timeout if specified (and not 0 which means infinite wait)
+        const timeoutSeconds = action.trigger?.timeoutSeconds || 0;
+        if (timeoutSeconds > 0) {
+            console.log(`[ActionExecutor] Setting timeout of ${timeoutSeconds} seconds for action: ${action.name}`);
+            const timeoutId = setTimeout(() => {
+                this.handleTimeout(action);
+            }, timeoutSeconds * 1000);
+            this.timeouts.set(action.id, timeoutId);
+        } else {
+            console.log(`[ActionExecutor] No timeout set for action: ${action.name} (infinite wait)`);
+        }
     }
 
     /**
@@ -182,6 +384,9 @@ class ActionExecutor {
     async executeAction(action, element) {
         // Mark as executed to prevent duplicate execution
         this.executedActions.add(action.id);
+        
+        // Clear timeout for this action if it exists
+        this.clearTimeout(action.id);
 
         console.log(`[ActionExecutor] Executing action: ${action.name}`);
         console.log(`[ActionExecutor] Action object:`, action);
@@ -216,6 +421,97 @@ class ActionExecutor {
 
         // Notify server that action was triggered
         this.notifyActionTriggered(action.id);
+        
+        // Execute next action in the chain if specified
+        if (action.nextActionId) {
+            console.log(`[ActionExecutor] Chaining to next action: ${action.nextActionId}`);
+            this.executeNextAction(action.nextActionId);
+        }
+    }
+    
+    /**
+     * Handle timeout for an action
+     * @param {Object} action - Action that timed out
+     */
+    handleTimeout(action) {
+        console.log(`[ActionExecutor] Timeout occurred for action: ${action.name}`);
+        
+        // Mark as executed to prevent it from executing later
+        this.executedActions.add(action.id);
+        
+        // Stop observing for this action
+        if (this.observers.has(action.id)) {
+            this.observers.get(action.id).disconnect();
+            this.observers.delete(action.id);
+        }
+        
+        // Execute next action in the chain if specified
+        if (action.nextActionId) {
+            console.log(`[ActionExecutor] Timeout - chaining to next action: ${action.nextActionId}`);
+            this.executeNextAction(action.nextActionId);
+        } else {
+            console.log(`[ActionExecutor] No next action specified for timed out action: ${action.name}`);
+        }
+    }
+    
+    /**
+     * Execute the next action in the chain
+     * @param {string} nextActionId - ID of the next action to execute
+     */
+    executeNextAction(nextActionId) {
+        const nextAction = this.actions.find(a => a.id === nextActionId);
+        
+        if (!nextAction) {
+            console.warn(`[ActionExecutor] Next action not found: ${nextActionId}`);
+            return;
+        }
+        
+        if (this.executedActions.has(nextActionId)) {
+            console.log(`[ActionExecutor] Next action already executed: ${nextAction.name}`);
+            return;
+        }
+        
+        console.log(`[ActionExecutor] Executing next action in chain: ${nextAction.name}`);
+        
+        // Execute based on trigger type
+        if (nextAction.trigger.type === 'immediate') {
+            // Execute immediate actions right away
+            this.executeAction(nextAction, null);
+        } else if (nextAction.trigger.type === 'elementVisible') {
+            // For element-based triggers, check if element already exists
+            const element = this.findElement(nextAction.trigger);
+            if (element && this.isElementVisible(element)) {
+                console.log(`[ActionExecutor] Element already visible for next action: ${nextAction.name}`);
+                this.executeAction(nextAction, element);
+            } else {
+                // Start monitoring for the element
+                console.log(`[ActionExecutor] Starting to monitor for element in next action: ${nextAction.name}`);
+                this.createObserverForAction(nextAction);
+            }
+        }
+    }
+    
+    /**
+     * Clear timeout for a specific action
+     * @param {string} actionId - ID of the action
+     */
+    clearTimeout(actionId) {
+        if (this.timeouts.has(actionId)) {
+            clearTimeout(this.timeouts.get(actionId));
+            this.timeouts.delete(actionId);
+            console.log(`[ActionExecutor] Cleared timeout for action: ${actionId}`);
+        }
+    }
+    
+    /**
+     * Clear all timeouts
+     */
+    clearAllTimeouts() {
+        this.timeouts.forEach((timeoutId, actionId) => {
+            clearTimeout(timeoutId);
+            console.log(`[ActionExecutor] Cleared timeout for action: ${actionId}`);
+        });
+        this.timeouts.clear();
     }
 
     /**

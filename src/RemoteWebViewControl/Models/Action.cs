@@ -5,6 +5,7 @@ public class ActionTrigger
     public string Type { get; set; } = "elementVisible"; // "elementVisible" or "immediate"
     public string? ElementType { get; set; } = "div"; // "div" or "button"
     public string? Selector { get; set; } = string.Empty; // CSS selector or element identifier
+    public double TimeoutSeconds { get; set; } = 0; // Timeout in seconds (0 = infinite wait, no timeout)
 }
 
 public class ActionDefinition
@@ -17,6 +18,12 @@ public class ActionDefinition
     public double DelaySeconds { get; set; } = 0; // Optional delay before executing action (supports decimals)
 }
 
+public class ActionStep
+{
+    public ActionTrigger Trigger { get; set; } = new();
+    public ActionDefinition Action { get; set; } = new();
+}
+
 public class ClientAction
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
@@ -25,9 +32,14 @@ public class ClientAction
     public string Description { get; set; } = string.Empty;
     public string TargetUrl { get; set; } = string.Empty; // URL where this action applies
     public bool IsActive { get; set; } = true;
-    public ActionTrigger Trigger { get; set; } = new();
-    public ActionDefinition Action { get; set; } = new();
-    public double DelaySeconds { get; set; } = 0; // Top-level delay (for backward compatibility)
+    public List<ActionStep> Actions { get; set; } = new(); // Array of sequential action steps
+    
+    // Deprecated - kept for backward compatibility
+    public ActionTrigger? Trigger { get; set; }
+    public ActionDefinition? Action { get; set; }
+    public double DelaySeconds { get; set; } = 0;
+    public string? NextActionId { get; set; }
+    
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastTriggered { get; set; }
 }
