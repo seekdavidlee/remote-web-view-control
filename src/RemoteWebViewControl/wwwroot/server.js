@@ -414,8 +414,6 @@ function setupEventListeners() {
     const formTab = document.getElementById('form-tab');
     const jsonTab = document.getElementById('json-tab');
     const jsonEditor = document.getElementById('actionJsonEditor');
-    const jsonErrorAlert = document.getElementById('jsonErrorAlert');
-    const jsonErrorMessage = document.getElementById('jsonErrorMessage');
     
     // When switching to JSON tab, sync from form to JSON
     jsonTab.addEventListener('shown.bs.tab', () => {
