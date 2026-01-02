@@ -122,6 +122,23 @@ function createDisplayWindow() {
 
     displayWindow.loadFile('waiting.html');
 
+    // Add navigation event listeners for debugging
+    displayWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+        console.log('Will navigate to:', navigationUrl);
+    });
+    
+    displayWindow.webContents.on('did-navigate', (event, navigationUrl) => {
+        console.log('Did navigate to:', navigationUrl);
+    });
+    
+    displayWindow.webContents.on('did-navigate-in-page', (event, navigationUrl) => {
+        console.log('Did navigate in page to:', navigationUrl);
+    });
+    
+    displayWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.error('Failed to load:', validatedURL, 'Error code:', errorCode, 'Description:', errorDescription);
+    });
+
     // Prevent closing the display window - just toggle fullscreen instead
     displayWindow.on('close', (event) => {
         // Only prevent close if not disconnecting and app isn't quitting
