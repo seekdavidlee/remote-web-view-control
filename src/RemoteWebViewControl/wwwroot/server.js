@@ -83,6 +83,99 @@ function setupEventListeners() {
         actionBuilderModal.show();
     });
 
+    // Import Action button
+    document.getElementById('btnImportAction').addEventListener('click', () => {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json';
+        fileInput.style.display = 'none';
+        
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                const text = await file.text();
+                const importedData = JSON.parse(text);
+                
+                // Validate the imported data
+                if (!importedData.name || !importedData.targetUrl) {
+                    alert('Invalid action JSON: missing required fields (name, targetUrl)');
+                    return;
+                }
+                
+                // Open the action builder modal with the imported data
+                if (!actionBuilderModal) {
+                    actionBuilderModal = new bootstrap.Modal(document.getElementById('actionBuilderModal'));
+                }
+                
+                resetActionForm();
+                
+                // Populate the form with imported data
+                document.getElementById('actionName').value = importedData.name;
+                document.getElementById('actionTargetUrl').value = importedData.targetUrl;
+                document.getElementById('actionDescription').value = importedData.description || '';
+                document.getElementById('isActive').checked = importedData.isActive !== false;
+                
+                // Load the first step if available
+                if (importedData.actions && importedData.actions.length > 0) {
+                    const step = importedData.actions[0];
+                    
+                    // Set trigger type
+                    const triggerType = step.trigger?.type === 'immediate' ? 'none' : 'element';
+                    document.getElementById(triggerType === 'none' ? 'triggerNone' : 'triggerElement').checked = true;
+                    document.querySelector('input[name="triggerType"]:checked').dispatchEvent(new Event('change'));
+                    
+                    if (triggerType === 'element' && step.trigger) {
+                        document.getElementById('elementType').value = step.trigger.elementType || 'div';
+                        document.getElementById('elementSelector').value = step.trigger.selector || '';
+                        document.getElementById('timeoutSeconds').value = step.trigger.timeoutSeconds || 0;
+                    }
+                    
+                    // Set action
+                    if (step.action) {
+                        document.getElementById('delaySeconds').value = step.action.delaySeconds || 0;
+                        
+                        if (triggerType === 'none') {
+                            // Quick action
+                            if (step.action.type === 'script' && step.action.script === 'document.documentElement.requestFullscreen()') {
+                                document.getElementById('quickActionType').value = 'fullscreen';
+                            } else if (step.action.type === 'navigate' && !step.action.url) {
+                                document.getElementById('quickActionType').value = 'none';
+                            }
+                        } else {
+                            // Standard action
+                            document.getElementById('actionType').value = step.action.type || 'click';
+                            document.getElementById('actionType').dispatchEvent(new Event('change'));
+                            
+                            if (step.action.type === 'click') {
+                                document.getElementById('actionClickX').value = step.action.clickX || 100;
+                                document.getElementById('actionClickY').value = step.action.clickY || 100;
+                            } else if (step.action.type === 'navigate') {
+                                document.getElementById('navigateUrl').value = step.action.url || '';
+                            }
+                        }
+                    }
+                }
+                
+                // Update the JSON editor
+                syncFormToJson();
+                
+                showConfirmation(`Imported action: ${importedData.name}`);
+                actionBuilderModal.show();
+                
+            } catch (error) {
+                console.error('Error importing action:', error);
+                alert(`Failed to import action: ${error.message}`);
+            } finally {
+                document.body.removeChild(fileInput);
+            }
+        });
+        
+        document.body.appendChild(fileInput);
+        fileInput.click();
+    });
+
     // Edit Action button
     document.getElementById('btnEditAction').addEventListener('click', () => {
         const select = document.getElementById('actionSelect');
