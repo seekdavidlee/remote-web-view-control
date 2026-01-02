@@ -82,15 +82,21 @@ function createDisplayWindow() {
     const targetDisplay = displays[displayIndex] || screen.getPrimaryDisplay();
     
     console.log(`Available displays: ${displays.length}`);
-    console.log(`Using display index ${displayIndex}: ${targetDisplay.bounds.width}x${targetDisplay.bounds.height} at (${targetDisplay.bounds.x}, ${targetDisplay.bounds.y})`);
+    console.log(`Target display ${displayIndex}: ${targetDisplay.bounds.width}x${targetDisplay.bounds.height} at (${targetDisplay.bounds.x}, ${targetDisplay.bounds.y})`);
+    
+    // Log all displays for debugging
+    displays.forEach((display, index) => {
+        console.log(`  Display ${index}: ${display.bounds.width}x${display.bounds.height} at (${display.bounds.x}, ${display.bounds.y}) ${display.primary ? '(primary)' : ''}`);
+    });
 
     displayWindow = new BrowserWindow({
-        width: 1920,
-        height: 1080,
-        fullscreen: true,
-        autoHideMenuBar: true,
+        width: targetDisplay.bounds.width,
+        height: targetDisplay.bounds.height,
         x: targetDisplay.bounds.x,
         y: targetDisplay.bounds.y,
+        fullscreen: false,
+        show: false, // Don't show until positioned correctly
+        autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -98,6 +104,19 @@ function createDisplayWindow() {
             sandbox: false,
             webSecurity: true
         }
+    });
+
+    // Position and show window after it's ready
+    displayWindow.once('ready-to-show', () => {
+        console.log(`Positioning window on display ${displayIndex}`);
+        displayWindow.setBounds(targetDisplay.bounds);
+        displayWindow.show();
+        
+        // Set fullscreen after a short delay to ensure proper positioning
+        setTimeout(() => {
+            console.log('Setting fullscreen mode');
+            displayWindow.setFullScreen(true);
+        }, 100);
     });
 
     // Handle permission requests (fullscreen, media, etc.)

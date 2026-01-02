@@ -1,0 +1,88 @@
+body {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.status-badge {
+    padding: 0.35rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.status-connected {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-disconnected {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-partial {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.session-code {
+    font-family: 'Courier New', monospace;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #2c3e50;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.session-code:hover {
+    color: #667eea;
+    text-decoration: underline;
+}
+
+.table th {
+    background-color: #f8f9fa;
+}
+
+.btn-danger-custom {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    border: none;
+    color: white;
+}
+
+.btn-danger-custom:hover {
+    background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+    color: white;
+}
+
+.refresh-btn {
+    animation: none;
+}
+
+.refresh-btn.spinning {
+    animation: spin 1s linear;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.header-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 15px 15px 0 0;
+}
+
+.empty-state {
+    padding: 3rem;
+    text-align: center;
+    color: #6c757d;
+}
