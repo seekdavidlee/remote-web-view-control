@@ -375,6 +375,7 @@
                                                 </label>
                                                 <select class="form-select" id="quickActionType">
                                                     <option value="">Select a quick action...</option>
+                                                    <option value="none">None (Just Navigate)</option>
                                                     <option value="fullscreen">Full screen</option>
                                                 </select>
                                                 <small class="text-muted">Choose a quick action to execute</small>
@@ -813,6 +814,13 @@
                         script: 'document.documentElement.requestFullscreen()',
                         delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
                     };
+                } else if (quickAction === 'none') {
+                    // None option - no action needed, just navigate to the page
+                    currentStep.action = {
+                        type: 'navigate',
+                        url: null,
+                        delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
+                    };
                 }
             } else {
                 const actionType = document.getElementById('actionType').value;
@@ -951,6 +959,8 @@
             } else {
                 if (step.action.type === 'script' && step.action.script === 'document.documentElement.requestFullscreen()') {
                     document.getElementById('quickActionType').value = 'fullscreen';
+                } else if (step.action.type === 'navigate' && !step.action.url) {
+                    document.getElementById('quickActionType').value = 'none';
                 }
             }
 

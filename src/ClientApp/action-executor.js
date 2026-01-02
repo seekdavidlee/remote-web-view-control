@@ -555,6 +555,10 @@ class ActionExecutor {
      */
     performNavigation(url, action) {
         try {
+            if (!url) {
+                console.log(`[ActionExecutor] No URL specified for action: ${action.name} - skipping navigation`);
+                return;
+            }
             console.log(`[ActionExecutor] Navigating to URL for action: ${action.name}`, url);
             window.location.href = url;
         } catch (error) {
