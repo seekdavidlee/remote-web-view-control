@@ -5,6 +5,7 @@ let clientName = '';
 let allActions = [];
 let editingActionId = null;
 let currentStepIndex = 0; // Current step being edited in the Actions array
+let importedActionsData = null; // Temporarily store imported multi-step actions
 let actionBuilderModal = null;
 let deleteActionModal = null;
 let actionToDelete = null;
@@ -111,6 +112,9 @@ function setupEventListeners() {
                 
                 resetActionForm();
                 
+                // Store all imported actions for use when saving
+                importedActionsData = importedData.actions || [];
+                
                 // Populate the form with imported data
                 document.getElementById('actionName').value = importedData.name;
                 document.getElementById('actionTargetUrl').value = importedData.targetUrl;
@@ -118,8 +122,8 @@ function setupEventListeners() {
                 document.getElementById('isActive').checked = importedData.isActive !== false;
                 
                 // Load the first step if available
-                if (importedData.actions && importedData.actions.length > 0) {
-                    const step = importedData.actions[0];
+                if (importedActionsData.length > 0) {
+                    const step = importedActionsData[0];
                     
                     // Set trigger type
                     const triggerType = step.trigger?.type === 'immediate' ? 'none' : 'element';
@@ -158,8 +162,13 @@ function setupEventListeners() {
                     }
                 }
                 
-                // Update the JSON editor
-                syncFormToJson();
+                // Update the JSON editor with the full imported data (all steps)
+                const jsonEditor = document.getElementById('actionJsonEditor');
+                jsonEditor.value = JSON.stringify(importedData, null, 2);
+                
+                // Update navigation buttons to enable Next/Previous if multiple steps
+                updateNavigationButtons();
+                updateStepCounter();
                 
                 showConfirmation(`Imported action: ${importedData.name}`);
                 actionBuilderModal.show();
@@ -196,20 +205,26 @@ function setupEventListeners() {
 
     // Previous Step button
     document.getElementById('btnPrevAction').addEventListener('click', () => {
-        if (editingActionId && currentStepIndex > 0) {
+        if (currentStepIndex > 0) {
             currentStepIndex--;
-            editAction(editingActionId, currentStepIndex);
+            loadStepIntoForm(currentStepIndex);
         }
     });
 
     // Next Step button
     document.getElementById('btnNextAction').addEventListener('click', () => {
+        let actionsArray = null;
+        
         if (editingActionId) {
             const action = allActions.find(a => a.id === editingActionId);
-            if (action && action.actions && currentStepIndex < action.actions.length - 1) {
-                currentStepIndex++;
-                editAction(editingActionId, currentStepIndex);
-            }
+            actionsArray = action?.actions;
+        } else if (importedActionsData) {
+            actionsArray = importedActionsData;
+        }
+        
+        if (actionsArray && currentStepIndex < actionsArray.length - 1) {
+            currentStepIndex++;
+            loadStepIntoForm(currentStepIndex);
         }
     });
 
@@ -427,7 +442,10 @@ function setupEventListeners() {
     
     // When switching to JSON tab, sync from form to JSON
     jsonTab.addEventListener('shown.bs.tab', () => {
-        syncFormToJson();
+        // Don't sync if we have imported data - preserve the full imported JSON
+        if (!importedActionsData || importedActionsData.length === 0) {
+            syncFormToJson();
+        }
     });
     
     // When switching to Form tab, sync from JSON to form
@@ -572,7 +590,7 @@ async function saveAction(closeModal = true) {
             targetUrl: document.getElementById('actionTargetUrl').value,
             description: document.getElementById('actionDescription').value,
             isActive: document.getElementById('isActive').checked,
-            actions: [currentStep]
+            actions: importedActionsData && importedActionsData.length > 0 ? importedActionsData : [currentStep]
         };
     }
 
@@ -598,6 +616,11 @@ async function saveAction(closeModal = true) {
             const savedAction = await response.json();
             editingActionId = savedAction.id; // Update in case it was a new action
             
+            // Clear imported data after successful save
+            if (importedActionsData && importedActionsData.length > 0) {
+                importedActionsData = null;
+            }
+            
             await loadActions();
             await notifyClientOfActions();
             populateActionDropdown();
@@ -617,6 +640,79 @@ async function saveAction(closeModal = true) {
         console.error('Error saving action:', error);
         alert('Failed to save action');
     }
+}
+
+// Load a step into the form (works for both editing and imported data)
+function loadStepIntoForm(stepIndex) {
+    let step = null;
+    let actionName = '';
+    let targetUrl = '';
+    let description = '';
+    let isActive = true;
+    
+    // Get step from editing action or imported data
+    if (editingActionId) {
+        const action = allActions.find(a => a.id === editingActionId);
+        if (action && action.actions && action.actions[stepIndex]) {
+            step = action.actions[stepIndex];
+            actionName = action.name;
+            targetUrl = action.targetUrl || '';
+            description = action.description || '';
+            isActive = action.isActive;
+        }
+    } else if (importedActionsData && importedActionsData[stepIndex]) {
+        step = importedActionsData[stepIndex];
+        // Keep existing form values for name, url, etc.
+        actionName = document.getElementById('actionName').value;
+        targetUrl = document.getElementById('actionTargetUrl').value;
+        description = document.getElementById('actionDescription').value;
+        isActive = document.getElementById('isActive').checked;
+    }
+    
+    if (!step) {
+        console.error('No step found at index', stepIndex);
+        return;
+    }
+    
+    currentStepIndex = stepIndex;
+    
+    // Update form with step data
+    document.getElementById('actionName').value = actionName;
+    document.getElementById('actionTargetUrl').value = targetUrl;
+    document.getElementById('actionDescription').value = description;
+    document.getElementById('isActive').checked = isActive;
+    
+    // Set trigger and action from the step
+    const triggerType = step.trigger?.type === 'immediate' ? 'none' : 'element';
+    document.getElementById(triggerType === 'none' ? 'triggerNone' : 'triggerElement').checked = true;
+    document.querySelector('input[name="triggerType"]:checked').dispatchEvent(new Event('change'));
+    
+    document.getElementById('timeoutSeconds').value = step.trigger?.timeoutSeconds || 0;
+    document.getElementById('delaySeconds').value = step.action?.delaySeconds || 0;
+    
+    if (triggerType === 'element') {
+        document.getElementById('elementType').value = step.trigger.elementType || 'div';
+        document.getElementById('elementSelector').value = step.trigger.selector || '';
+        document.getElementById('actionType').value = step.action?.type || 'click';
+        
+        const clickXInput = document.getElementById('actionClickX');
+        const clickYInput = document.getElementById('actionClickY');
+        clickXInput.value = step.action?.clickX ?? 100;
+        clickYInput.value = step.action?.clickY ?? 100;
+        
+        document.getElementById('navigateUrl').value = step.action?.url || '';
+        document.getElementById('actionType').dispatchEvent(new Event('change'));
+    } else {
+        if (step.action?.type === 'script' && step.action.script === 'document.documentElement.requestFullscreen()') {
+            document.getElementById('quickActionType').value = 'fullscreen';
+        } else if (step.action?.type === 'navigate' && !step.action.url) {
+            document.getElementById('quickActionType').value = 'none';
+        }
+    }
+    
+    // Update step counter and navigation
+    updateStepCounter();
+    updateNavigationButtons();
 }
 
 function editAction(actionId, stepIndex = 0) {
@@ -848,6 +944,7 @@ function resetActionForm() {
     document.getElementById('btnCancelEdit').style.display = 'none';
     editingActionId = null;
     currentStepIndex = 0;
+    importedActionsData = null; // Clear any imported data
     window.chainFromActionId = null;
     
     // Unlock target URL field
@@ -872,14 +969,22 @@ function resetActionForm() {
 // Update step counter display
 function updateStepCounter() {
     const counter = document.getElementById('stepCounter');
-    if (!editingActionId) {
-        counter.style.display = 'none';
-        return;
+    let actionsArray = null;
+    
+    // Check if we're editing an existing action
+    if (editingActionId) {
+        const action = allActions.find(a => a.id === editingActionId);
+        if (action && action.actions) {
+            actionsArray = action.actions;
+        }
+    }
+    // Check if we have imported data
+    else if (importedActionsData && importedActionsData.length > 0) {
+        actionsArray = importedActionsData;
     }
     
-    const action = allActions.find(a => a.id === editingActionId);
-    if (action && action.actions && action.actions.length > 0) {
-        counter.textContent = `(Step ${currentStepIndex + 1} of ${action.actions.length})`;
+    if (actionsArray && actionsArray.length > 0) {
+        counter.textContent = `(Step ${currentStepIndex + 1} of ${actionsArray.length})`;
         counter.style.display = 'inline';
     } else {
         counter.style.display = 'none';
@@ -888,14 +993,22 @@ function updateStepCounter() {
 
 // Update navigation buttons based on current step
 function updateNavigationButtons() {
-    if (!editingActionId) {
-        document.getElementById('btnPrevAction').disabled = true;
-        document.getElementById('btnNextAction').disabled = true;
-        return;
+    let actionsArray = null;
+    
+    // Check if we're editing an existing action
+    if (editingActionId) {
+        const action = allActions.find(a => a.id === editingActionId);
+        if (action && action.actions) {
+            actionsArray = action.actions;
+        }
+    }
+    // Check if we have imported data
+    else if (importedActionsData && importedActionsData.length > 0) {
+        actionsArray = importedActionsData;
     }
     
-    const action = allActions.find(a => a.id === editingActionId);
-    if (!action || !action.actions || action.actions.length === 0) {
+    // If no actions available, disable both buttons
+    if (!actionsArray || actionsArray.length === 0) {
         document.getElementById('btnPrevAction').disabled = true;
         document.getElementById('btnNextAction').disabled = true;
         return;
@@ -907,7 +1020,7 @@ function updateNavigationButtons() {
     
     // Enable/disable Next button
     const btnNext = document.getElementById('btnNextAction');
-    btnNext.disabled = currentStepIndex >= action.actions.length - 1;
+    btnNext.disabled = currentStepIndex >= actionsArray.length - 1;
 }
 
 // Add a new step to the current action
