@@ -74,21 +74,24 @@
                             <i class="bi bi-globe me-1"></i>Server URL
                         </label>
                         <input type="url" class="form-control" id="serverUrl" 
-                               placeholder="http://localhost:5000" value="http://localhost:5000">
+                               placeholder="http://localhost:5000" value="http://localhost:5000" readonly>
                     </div>
 
                     <div class="mb-3">
-                        <label for="codeInput" class="form-label fw-bold">
-                            <i class="bi bi-key me-1"></i>Session Code
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-pc-display me-1"></i>Client Name
                         </label>
-                        <input type="text" class="form-control code-input" id="codeInput" 
-                               maxlength="5" placeholder="XXXXX" autocomplete="off">
+                        <div class="form-control code-input bg-light" id="clientNameDisplay" style="font-size: 1.2rem;">
+                            Loading...
+                        </div>
+                        <div class="form-text">This is your computer's hostname</div>
                     </div>
 
-                    <div class="d-grid">
-                        <button id="btnConnect" class="btn btn-success btn-lg">
-                            <i class="bi bi-link-45deg me-1"></i>Connect
-                        </button>
+                    <div class="text-center">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Connecting...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Connecting to server...</p>
                     </div>
 
                     <div id="errorAlert" class="alert alert-danger mt-3 d-none">
@@ -101,7 +104,7 @@
                 <div id="connectedState" class="d-none">
                     <div class="alert alert-success mb-3">
                         <span class="status-indicator status-connected"></span>
-                        Connected to session: <strong id="sessionCodeDisplay"></strong>
+                        Connected as: <strong id="sessionCodeDisplay"></strong>
                     </div>
 
                     <div class="mb-3">
@@ -136,10 +139,7 @@
 
     <script>
         const serverUrlInput = document.getElementById('serverUrl');
-        const codeInput = document.getElementById('codeInput');
-        const btnConnect = document.getElementById('btnConnect');
-        const btnDisconnect = document.getElementById('btnDisconnect');
-        const btnToggleFullscreen = document.getElementById('btnToggleFullscreen');
+        const clientNameDisplay = document.getElementById('clientNameDisplay');
         const connectionForm = document.getElementById('connectionForm');
         const connectedState = document.getElementById('connectedState');
         const reconnectingState = document.getElementById('reconnectingState');
@@ -148,9 +148,18 @@
         const sessionCodeDisplay = document.getElementById('sessionCodeDisplay');
         const logArea = document.getElementById('logArea');
 
-        // Load saved server URL
-        const savedUrl = localStorage.getItem('serverUrl');
-        if (savedUrl) serverUrlInput.value = savedUrl;
+        // Load config and auto-connect
+        window.electronAPI.onConfigLoaded((config) => {
+            serverUrlInput.value = config.serverUrl;
+            
+            // Auto-connect on startup
+            window.electronAPI.connect(config.serverUrl);
+        });
+        
+        // Get and display client name
+        window.electronAPI.getClientName().then(clientName => {
+            clientNameDisplay.textContent = clientName;
+        });
 
         function addLog(message, type = 'info') {
             const time = new Date().toLocaleTimeString();
@@ -168,34 +177,10 @@
             errorAlert.classList.add('d-none');
         }
 
-        // Auto-uppercase code input
-        codeInput.addEventListener('input', (e) => {
-            e.target.value = e.target.value.toUpperCase();
-        });
-
-        // Connect button
-        btnConnect.addEventListener('click', async () => {
-            const url = serverUrlInput.value.trim();
-            const code = codeInput.value.trim();
-
-            if (!url) {
-                showError('Please enter the server URL');
-                return;
-            }
-            if (code.length !== 5) {
-                showError('Please enter a valid 5-character code');
-                return;
-            }
-
-            hideError();
-            btnConnect.disabled = true;
-            btnConnect.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Connecting...';
-
-            localStorage.setItem('serverUrl', url);
-            await window.electronAPI.connect(url, code);
-        });
-
         // Disconnect button
+        const btnDisconnect = document.getElementById('btnDisconnect');
+        const btnToggleFullscreen = document.getElementById('btnToggleFullscreen');
+        
         btnDisconnect.addEventListener('click', async () => {
             await window.electronAPI.disconnect();
             connectedState.classList.add('d-none');
@@ -209,18 +194,14 @@
         });
 
         // Event handlers
-        window.electronAPI.onConnected((code) => {
-            btnConnect.disabled = false;
-            btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
+        window.electronAPI.onConnected((clientName) => {
             connectionForm.classList.add('d-none');
             connectedState.classList.remove('d-none');
-            sessionCodeDisplay.textContent = code;
-            addLog('Connected to session', 'success');
+            sessionCodeDisplay.textContent = clientName;
+            addLog('Connected successfully', 'success');
         });
 
         window.electronAPI.onConnectionError((error) => {
-            btnConnect.disabled = false;
-            btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
             showError(error);
         });
 
@@ -256,8 +237,6 @@
             connectedState.classList.add('d-none');
             reconnectingState.classList.add('d-none');
             connectionForm.classList.remove('d-none');
-            btnConnect.disabled = false;
-            btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
         });
 
         window.electronAPI.onResetToInitial(() => {
@@ -265,16 +244,8 @@
             connectedState.classList.add('d-none');
             reconnectingState.classList.add('d-none');
             connectionForm.classList.remove('d-none');
-            btnConnect.disabled = false;
-            btnConnect.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Connect';
             logArea.innerHTML = '<div class="text-muted">Waiting for commands...</div>';
-            codeInput.value = '';
             addLog('Session cleared by admin - reset to initial state', 'info');
-        });
-
-        // Enter key to connect
-        codeInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') btnConnect.click();
         });
     </script>
 </body>

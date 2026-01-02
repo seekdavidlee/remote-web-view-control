@@ -1,36 +1,40 @@
 using Microsoft.AspNetCore.SignalR;
 using RemoteWebViewControl.Services;
+using RemoteWebViewControl.Models;
 
 namespace RemoteWebViewControl.Hubs;
 
-public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub> logger) : Hub
+public class RemoteViewHub(SessionService sessionService, ActionService actionService, ILogger<RemoteViewHub> logger) : Hub
 {
-    public async Task<bool> ServerJoinSession(string code)
+    public async Task<bool> ServerJoinSession(string clientName)
     {
-        var session = sessionService.GetSession(code);
+        var session = sessionService.GetSession(clientName);
         if (session == null)
         {
-            logger.LogWarning("Server tried to join invalid session: {Code}", code);
+            logger.LogWarning("Server tried to join session for non-existent client: {ClientName}", clientName);
             return false;
         }
 
-        sessionService.SetServerConnection(code, Context.ConnectionId);
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"session-{code}");
-        logger.LogInformation("Server joined session: {Code}", code);
+        sessionService.SetServerConnection(clientName, Context.ConnectionId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"session-{clientName}");
+        logger.LogInformation("Server joined session for client: {ClientName}", clientName);
+        
+        // If client is already connected, notify the server immediately
+        if (!string.IsNullOrEmpty(session.ClientConnectionId))
+        {
+            await Clients.Caller.SendAsync("ClientConnected");
+            logger.LogInformation("Notified server that client {ClientName} is already connected", clientName);
+        }
+        
         return true;
     }
 
-    public async Task<bool> ClientJoinSession(string code)
+    public async Task<bool> ClientJoinSession(string clientName)
     {
-        var session = sessionService.GetSession(code);
-        if (session == null)
-        {
-            logger.LogWarning("Client tried to join invalid session: {Code}", code);
-            return false;
-        }
-
-        sessionService.SetClientConnection(code, Context.ConnectionId);
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"session-{code}");
+        var session = sessionService.GetOrCreateSession(clientName);
+        
+        sessionService.SetClientConnection(clientName, Context.ConnectionId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"session-{clientName}");
         
         // Notify the server that client has connected
         if (!string.IsNullOrEmpty(session.ServerConnectionId))
@@ -38,52 +42,52 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
             await Clients.Client(session.ServerConnectionId).SendAsync("ClientConnected");
         }
 
-        logger.LogInformation("Client joined session: {Code}", code);
+        logger.LogInformation("Client joined session: {ClientName}", clientName);
         return true;
     }
 
-    public async Task SendUrlToClient(string code, string url)
+    public async Task SendUrlToClient(string clientName, string url)
     {
-        var session = sessionService.GetSession(code);
+        var session = sessionService.GetSession(clientName);
         if (session == null || string.IsNullOrEmpty(session.ClientConnectionId))
         {
-            logger.LogWarning("Cannot send URL - no client connected for session: {Code}", code);
+            logger.LogWarning("Cannot send URL - no client connected for: {ClientName}", clientName);
             return;
         }
 
         await Clients.Client(session.ClientConnectionId).SendAsync("ReceiveUrl", url);
-        logger.LogInformation("URL sent to client in session {Code}: {Url}", code, url);
+        logger.LogInformation("URL sent to client {ClientName}: {Url}", clientName, url);
     }
 
-    public async Task ExecuteScriptOnClient(string code, string script)
+    public async Task ExecuteScriptOnClient(string clientName, string script)
     {
-        var session = sessionService.GetSession(code);
+        var session = sessionService.GetSession(clientName);
         if (session == null || string.IsNullOrEmpty(session.ClientConnectionId))
         {
-            logger.LogWarning("Cannot execute script - no client connected for session: {Code}", code);
+            logger.LogWarning("Cannot execute script - no client connected for: {ClientName}", clientName);
             return;
         }
 
         await Clients.Client(session.ClientConnectionId).SendAsync("ExecuteScript", script);
-        logger.LogInformation("Script sent to client in session {Code}", code);
+        logger.LogInformation("Script sent to client {ClientName}", clientName);
     }
 
-    public async Task SimulateMouseClick(string code, int x, int y)
+    public async Task SimulateMouseClick(string clientName, int x, int y)
     {
-        var session = sessionService.GetSession(code);
+        var session = sessionService.GetSession(clientName);
         if (session == null || string.IsNullOrEmpty(session.ClientConnectionId))
         {
-            logger.LogWarning("Cannot simulate mouse click - no client connected for session: {Code}", code);
+            logger.LogWarning("Cannot simulate mouse click - no client connected for: {ClientName}", clientName);
             return;
         }
 
         await Clients.Client(session.ClientConnectionId).SendAsync("SimulateMouseClick", x, y);
-        logger.LogInformation("Mouse click simulation sent to client in session {Code} at ({X}, {Y})", code, x, y);
+        logger.LogInformation("Mouse click simulation sent to client {ClientName} at ({X}, {Y})", clientName, x, y);
     }
 
-    public async Task SendLogMessage(string code, string level, string message)
+    public async Task SendLogMessage(string clientName, string level, string message)
     {
-        var session = sessionService.GetSession(code);
+        var session = sessionService.GetSession(clientName);
         if (session == null || string.IsNullOrEmpty(session.ServerConnectionId))
         {
             return;
@@ -92,17 +96,43 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
         await Clients.Client(session.ServerConnectionId).SendAsync("ReceiveLogMessage", level, message, DateTime.UtcNow);
     }
 
-    public async Task SendDisplayDimensions(string code, int width, int height)
+    public async Task SendDisplayDimensions(string clientName, int width, int height)
     {
-        var session = sessionService.GetSession(code);
+        var session = sessionService.GetSession(clientName);
         if (session == null || string.IsNullOrEmpty(session.ServerConnectionId))
         {
-            logger.LogWarning("Cannot send display dimensions - no server connected for session: {Code}", code);
+            logger.LogWarning("Cannot send display dimensions - no server connected for: {ClientName}", clientName);
             return;
         }
 
         await Clients.Client(session.ServerConnectionId).SendAsync("ReceiveDisplayDimensions", width, height);
-        logger.LogInformation("Display dimensions sent to server in session {Code}: {Width}x{Height}", code, width, height);
+        logger.LogInformation("Display dimensions sent to server for client {ClientName}: {Width}x{Height}", clientName, width, height);
+    }
+
+    public async Task SendActionsToClient(string clientName)
+    {
+        var session = sessionService.GetSession(clientName);
+        if (session == null || string.IsNullOrEmpty(session.ClientConnectionId))
+        {
+            logger.LogWarning("Cannot send actions - no client connected for: {ClientName}", clientName);
+            return;
+        }
+
+        var actions = actionService.GetActiveActionsForClient(clientName);
+        await Clients.Client(session.ClientConnectionId).SendAsync("ReceiveActions", actions);
+        logger.LogInformation("Sent {Count} actions to client {ClientName}", actions.Count(), clientName);
+    }
+
+    public async Task ActionTriggered(string clientName, string actionId)
+    {
+        actionService.RecordActionTriggered(clientName, actionId);
+        
+        var session = sessionService.GetSession(clientName);
+        if (session != null && !string.IsNullOrEmpty(session.ServerConnectionId))
+        {
+            await Clients.Client(session.ServerConnectionId).SendAsync("ActionWasTriggered", actionId, DateTime.UtcNow);
+            logger.LogInformation("Notified server that action {ActionId} was triggered for client {ClientName}", actionId, clientName);
+        }
     }
 
     public async Task ClearAllSessions()
@@ -118,12 +148,12 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
             {
                 try
                 {
-                    logger.LogInformation("Sending ResetClient to session {Code}", session.Code);
+                    logger.LogInformation("Sending ResetClient to session {ClientName}", session.ClientName);
                     await Clients.Client(session.ClientConnectionId).SendAsync("ResetClient");
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error sending reset to client in session {Code}", session.Code);
+                    logger.LogError(ex, "Error sending reset to client {ClientName}", session.ClientName);
                 }
             }
             
@@ -132,12 +162,12 @@ public class RemoteViewHub(SessionService sessionService, ILogger<RemoteViewHub>
             {
                 try
                 {
-                    logger.LogInformation("Sending ResetServer to session {Code}", session.Code);
+                    logger.LogInformation("Sending ResetServer to session {ClientName}", session.ClientName);
                     await Clients.Client(session.ServerConnectionId).SendAsync("ResetServer");
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error sending reset to server in session {Code}", session.Code);
+                    logger.LogError(ex, "Error sending reset to server for client {ClientName}", session.ClientName);
                 }
             }
         }

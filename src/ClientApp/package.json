@@ -19,6 +19,9 @@
   "dependencies": {
     "@microsoft/signalr": "^8.0.0"
   },
+  "overrides": {
+    "inflight": "npm:@aashutoshrathi/inflight@^1.0.0"
+  },
   "build": {
     "appId": "com.remoteview.client",
     "productName": "Remote View Client",

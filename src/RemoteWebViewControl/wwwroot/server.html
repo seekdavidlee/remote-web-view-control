@@ -64,31 +64,27 @@
                             <h2 class="mt-2">Server Control Panel</h2>
                         </div>
 
-                        <!-- Initial State - Getting Code -->
-                        <div id="initialState" class="text-center">
-                            <button id="btnGetCode" class="btn btn-primary btn-lg px-5">
-                                <i class="bi bi-key me-2"></i>Generate Session Code
-                            </button>
+                    <!-- Waiting for client -->
+                    <div id="waitingState">
+                        <div class="text-center mb-4">
+                            <p class="text-muted mb-2">Controlling client:</p>
+                            <div class="code-display p-3 bg-light rounded" id="clientNameDisplay"></div>
                         </div>
-
-                        <!-- Code Display State -->
-                        <div id="codeState" class="d-none">
-                            <div class="text-center mb-4">
-                                <p class="text-muted mb-2">Share this code with the client:</p>
-                                <div class="code-display p-3 bg-light rounded" id="sessionCode"></div>
-                                <button id="btnCopyCode" class="btn btn-outline-secondary btn-sm mt-2">
-                                    <i class="bi bi-clipboard me-1"></i>Copy Code
-                                </button>
-                            </div>
-                            
-                            <div class="alert alert-info" id="waitingAlert">
-                                <span class="status-indicator status-waiting"></span>
-                                Waiting for client to connect...
-                            </div>
+                        
+                        <div class="alert alert-info" id="waitingAlert">
+                            <span class="status-indicator status-waiting"></span>
+                            Waiting for client to connect...
                         </div>
+                        
+                        <div class="text-center">
+                            <a href="/admin" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>Back to Admin Panel
+                            </a>
+                        </div>
+                    </div>
 
-                        <!-- Connected State -->
-                        <div id="connectedState" class="d-none">
+                    <!-- Connected State -->
+                    <div id="connectedState" class="d-none">
                             <div class="alert alert-success mb-4">
                                 <span class="status-indicator status-connected"></span>
                                 <strong>Client Connected!</strong>
@@ -107,6 +103,31 @@
                                         <i class="bi bi-send me-1"></i>Send
                                     </button>
                                 </div>
+                            </div>
+
+                            <!-- Quick Action Launcher -->
+                            <div class="mb-4">
+                                <label for="actionSelect" class="form-label fw-bold">
+                                    <i class="bi bi-play-circle me-1"></i>Launch Saved Action:
+                                </label>
+                                <div class="input-group mb-2">
+                                    <select class="form-select" id="actionSelect">
+                                        <option value="">Select an action...</option>
+                                    </select>
+                                    <button class="btn btn-success" type="button" id="btnLaunchAction" disabled>
+                                        <i class="bi bi-rocket-takeoff me-1"></i>Launch
+                                    </button>
+                                    <button class="btn btn-outline-primary" type="button" id="btnNewAction" title="Create new action">
+                                        <i class="bi bi-plus-circle"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" type="button" id="btnEditAction" disabled title="Edit selected action">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" type="button" id="btnDeleteAction" disabled title="Delete selected action">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Sends the action's URL and activates the action on the client</small>
                             </div>
 
                             <!-- Script Section -->
@@ -236,36 +257,290 @@
         </div>
     </div>
 
+    <!-- Action Builder Modal -->
+    <div class="modal fade" id="actionBuilderModal" tabindex="-1" aria-labelledby="actionBuilderModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="actionBuilderModalLabel">
+                        <span id="actionFormTitle"><i class="bi bi-plus-circle me-2"></i>Create New Action</span>
+                        <small class="ms-2" id="stepCounter" style="display: none;"></small>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row justify-content-center">
+                        <!-- Action Form -->
+                        <div class="col-12">
+                                    <form id="actionForm">
+                                        <!-- Action Name -->
+                                        <div class="mb-3">
+                                            <label for="actionName" class="form-label fw-bold">
+                                                <i class="bi bi-tag me-1"></i>Action Name
+                                            </label>
+                                            <input type="text" class="form-control" id="actionName" 
+                                                   placeholder="e.g., Click Play Button" required>
+                                        </div>
+
+                                        <!-- Target URL -->
+                                        <div class="mb-3">
+                                            <label for="actionTargetUrl" class="form-label fw-bold">
+                                                <i class="bi bi-link-45deg me-1"></i>Target URL
+                                            </label>
+                                            <input type="url" class="form-control" id="actionTargetUrl" 
+                                                   placeholder="https://www..." required>
+                                            <small class="text-muted">The URL where this action applies (the page that will be loaded)</small>
+                                        </div>
+
+                                        <!-- Description -->
+                                        <div class="mb-3">
+                                            <label for="actionDescription" class="form-label fw-bold">
+                                                <i class="bi bi-text-left me-1"></i>Description (Optional)
+                                            </label>
+                                            <textarea class="form-control" id="actionDescription" rows="2" 
+                                                      placeholder="What does this action do?"></textarea>
+                                        </div>
+
+                                        <hr class="my-3">
+                                        <h6 class="text-primary mb-3">
+                                            <i class="bi bi-flag-fill me-2"></i>Trigger Configuration
+                                        </h6>
+
+                                        <!-- Action Trigger Tiles -->
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">
+                                                <i class="bi bi-lightning-charge me-1"></i>Action Trigger Type
+                                            </label>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <input type="radio" class="btn-check" name="triggerType" id="triggerNone" value="none">
+                                                <label class="btn btn-outline-primary" for="triggerNone">
+                                                    <i class="bi bi-x-circle me-1"></i>None
+                                                </label>
+                                                
+                                                <input type="radio" class="btn-check" name="triggerType" id="triggerElement" value="element" checked>
+                                                <label class="btn btn-outline-primary" for="triggerElement">
+                                                    <i class="bi bi-square me-1"></i>Element Visible
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">Choose when this action should be triggered</small>
+                                        </div>
+
+                                        <!-- Element Configuration (shown when Element Visible is selected) -->
+                                        <div id="elementTriggerConfig">
+                                            <!-- Element Type -->
+                                            <div class="mb-3">
+                                                <label for="elementType" class="form-label fw-bold">
+                                                    <i class="bi bi-box me-1"></i>Element Type
+                                                </label>
+                                                <select class="form-select" id="elementType">
+                                                    <option value="div">Div Element</option>
+                                                    <option value="button">Button Element</option>
+                                                </select>
+                                            </div>
+
+                                            <!-- Element Selector -->
+                                            <div class="mb-3">
+                                                <label for="elementSelector" class="form-label fw-bold">
+                                                    <i class="bi bi-code-square me-1"></i>CSS Selector
+                                                </label>
+                                                <input type="text" class="form-control" id="elementSelector" 
+                                                       placeholder=".play-button, #videoPlayer">
+                                                <small class="text-muted">CSS selector to identify the element</small>
+                                            </div>
+
+                                            <!-- Timeout -->
+                                            <div class="mb-3">
+                                                <label for="timeoutSeconds" class="form-label fw-bold">
+                                                    <i class="bi bi-hourglass me-1"></i>Timeout
+                                                </label>
+                                                <div class="input-group">
+                                                    <input type="number" class="form-control" id="timeoutSeconds" 
+                                                           min="0" max="300" step="0.1" value="0">
+                                                    <span class="input-group-text">seconds</span>
+                                                </div>
+                                                <small class="text-muted">0 = infinite wait (no timeout), &gt;0 = execute next action on timeout</small>
+                                            </div>
+                                        </div>
+
+                                        <hr class="my-3">
+                                        <h6 class="text-success mb-3">
+                                            <i class="bi bi-lightning-fill me-2"></i>Action to Execute
+                                        </h6>
+
+                                        <!-- Quick Action Selection (shown when trigger type is "none") -->
+                                        <div id="quickActionSelection" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="quickActionType" class="form-label fw-bold">
+                                                    <i class="bi bi-lightning me-1"></i>Quick Action
+                                                </label>
+                                                <select class="form-select" id="quickActionType">
+                                                    <option value="">Select a quick action...</option>
+                                                    <option value="none">None (Just Navigate)</option>
+                                                    <option value="fullscreen">Full screen</option>
+                                                </select>
+                                                <small class="text-muted">Choose a quick action to execute</small>
+                                            </div>
+                                        </div>
+
+                                        <!-- Standard Action Type Selection (shown when trigger type is "element") -->
+                                        <div id="standardActionSelection">
+                                            <!-- Action Type -->
+                                            <div class="mb-3">
+                                                <label for="actionType" class="form-label fw-bold">
+                                                    <i class="bi bi-cursor-fill me-1"></i>Action Type
+                                                </label>
+                                                <select class="form-select" id="actionType">
+                                                    <option value="click">Simulate Mouse Click at Coordinates</option>
+                                                    <option value="navigate">Navigate to Different URL</option>
+                                                </select>
+                                                <small class="text-muted">What should happen when the element is detected?</small>
+                                            </div>
+
+                                            <!-- Click Coordinates (conditional) -->
+                                            <div class="mb-3" id="clickCoordinatesContainer">
+                                                <label class="form-label fw-bold">
+                                                    <i class="bi bi-cursor-fill me-1"></i>Click Coordinates
+                                                </label>
+                                                <div class="row">
+                                                    <div class="col-6">
+                                                        <label for="actionClickX" class="form-label">X:</label>
+                                                        <input type="number" class="form-control" id="actionClickX" 
+                                                               placeholder="100" min="0" value="100">
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label for="actionClickY" class="form-label">Y:</label>
+                                                        <input type="number" class="form-control" id="actionClickY" 
+                                                               placeholder="100" min="0" value="100">
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted">Pixel coordinates where to click (top-left is 0,0)</small>
+                                            </div>
+
+                                            <!-- Navigate URL (conditional) -->
+                                            <div class="mb-3" id="navigateUrlContainer" style="display: none;">
+                                                <label for="navigateUrl" class="form-label fw-bold">
+                                                    <i class="bi bi-link-45deg me-1"></i>Navigate To (Destination URL)
+                                                </label>
+                                                <input type="url" class="form-control" id="navigateUrl" 
+                                                       placeholder="https://example.com/next-page">
+                                                <small class="text-muted">The URL to navigate to when the element appears</small>
+                                            </div>
+                                        </div>
+
+                                        <!-- Delay -->
+                                        <div class="mb-3">
+                                            <label for="delaySeconds" class="form-label fw-bold">
+                                                <i class="bi bi-clock me-1"></i>Delay Before Execution
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control" id="delaySeconds" 
+                                                       min="0" max="300" step="0.1" value="0">
+                                                <span class="input-group-text">seconds</span>
+                                            </div>
+                                            <small class="text-muted">0 = immediate, supports decimals (e.g., 1.5)</small>
+                                        </div>
+
+                                        <!-- Active Status -->
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="isActive" checked>
+                                                <label class="form-check-label" for="isActive">
+                                                    <i class="bi bi-toggle-on me-1"></i>Action is Active
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">Only active actions will be executed on the client</small>
+                                        </div>
+
+                                        <!-- Submit Buttons -->
+                                        <div class="d-flex gap-2 mb-3">
+                                            <button type="button" class="btn btn-outline-secondary" id="btnPrevAction" disabled title="Edit previous action in chain">
+                                                <i class="bi bi-arrow-left me-1"></i>Previous
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" id="btnNextAction" disabled title="Edit next action in chain">
+                                                Next<i class="bi bi-arrow-right ms-1"></i>
+                                            </button>
+                                            <div class="flex-grow-1"></div>
+                                            <button type="button" class="btn btn-outline-info" id="btnAddStep">
+                                                <i class="bi bi-plus-circle me-1"></i>Add Step
+                                            </button>
+                                        </div>
+                                        <div class="d-grid gap-2">
+                                            <button type="submit" class="btn btn-primary" id="btnSaveAction">
+                                                <i class="bi bi-check-circle me-2"></i>
+                                                <span id="btnSaveText">Create Action</span>
+                                            </button>
+                                            <button type="button" class="btn btn-secondary" id="btnCancelEdit" style="display: none;">
+                                                <i class="bi bi-x-circle me-2"></i>Cancel Edit
+                                            </button>
+                                        </div>
+                                    </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Action Confirmation Modal -->
+    <div class="modal fade" id="deleteActionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this action?</p>
+                    <p class="mb-0"><strong id="deleteActionName"></strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="btnConfirmDeleteAction">
+                        <i class="bi bi-trash me-1"></i>Delete Action
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <script>
         let connection = null;
-        let sessionCode = '';
+        let clientName = '';
+        
+        // Action Builder variables
+        let allActions = [];
+        let editingActionId = null;
+        let currentStepIndex = 0; // Current step being edited in the Actions array
+        let actionBuilderModal = null;
+        let deleteActionModal = null;
+        let actionToDelete = null;
 
-        document.getElementById('btnGetCode').addEventListener('click', async () => {
-            try {
-                const response = await fetch('/api/session/create', { method: 'POST' });
-                const data = await response.json();
-                sessionCode = data.code;
-                
-                document.getElementById('sessionCode').textContent = sessionCode;
-                document.getElementById('initialState').classList.add('d-none');
-                document.getElementById('codeState').classList.remove('d-none');
-                
-                await connectToHub();
-            } catch (error) {
-                console.error('Error creating session:', error);
-                alert('Failed to create session. Please try again.');
+        // Get client name from URL path
+        function getClientNameFromUrl() {
+            const pathParts = window.location.pathname.split('/').filter(p => p);
+            // Path should be /server/<client-name>
+            if (pathParts.length >= 2 && pathParts[0] === 'server') {
+                return decodeURIComponent(pathParts[1]);
             }
-        });
+            return null;
+        }
 
-        document.getElementById('btnCopyCode').addEventListener('click', () => {
-            navigator.clipboard.writeText(sessionCode);
-            const btn = document.getElementById('btnCopyCode');
-            btn.innerHTML = '<i class="bi bi-check me-1"></i>Copied!';
-            setTimeout(() => {
-                btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Code';
-            }, 2000);
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            clientName = getClientNameFromUrl();
+            
+            if (!clientName) {
+                window.location.href = '/admin?error=' + encodeURIComponent('No client specified');
+                return;
+            }
+
+            document.getElementById('clientNameDisplay').textContent = clientName;
+            
+            await connectToHub();
         });
 
         document.getElementById('btnSendUrl').addEventListener('click', sendUrl);
@@ -280,7 +555,7 @@
             btn.addEventListener('click', async () => {
                 const script = btn.dataset.script;
                 try {
-                    await connection.invoke('ExecuteScriptOnClient', sessionCode, script);
+                    await connection.invoke('ExecuteScriptOnClient', clientName, script);
                     showConfirmation('Script executed!');
                 } catch (error) {
                     console.error('Error executing script:', error);
@@ -301,6 +576,572 @@
             mouseClickModal.show();
         });
 
+        // New Action button
+        document.getElementById('btnNewAction').addEventListener('click', () => {
+            if (!actionBuilderModal) {
+                actionBuilderModal = new bootstrap.Modal(document.getElementById('actionBuilderModal'));
+            }
+            resetActionForm();
+            actionBuilderModal.show();
+        });
+
+        // Edit Action button
+        document.getElementById('btnEditAction').addEventListener('click', () => {
+            const select = document.getElementById('actionSelect');
+            const actionId = select.value;
+            if (!actionId) return;
+            
+            if (!actionBuilderModal) {
+                actionBuilderModal = new bootstrap.Modal(document.getElementById('actionBuilderModal'));
+            }
+            editAction(actionId, 0); // Start at first step
+            actionBuilderModal.show();
+        });
+        
+        // Add Step button
+        document.getElementById('btnAddStep').addEventListener('click', async () => {
+            await addStep();
+        });
+        
+        // Previous Step button
+        document.getElementById('btnPrevAction').addEventListener('click', () => {
+            if (editingActionId && currentStepIndex > 0) {
+                currentStepIndex--;
+                editAction(editingActionId, currentStepIndex);
+            }
+        });
+        
+        // Next Step button
+        document.getElementById('btnNextAction').addEventListener('click', () => {
+            if (editingActionId) {
+                const action = allActions.find(a => a.id === editingActionId);
+                if (action && action.actions && currentStepIndex < action.actions.length - 1) {
+                    currentStepIndex++;
+                    editAction(editingActionId, currentStepIndex);
+                }
+            }
+        });
+        
+        // Cancel Edit button
+        document.getElementById('btnCancelEdit').addEventListener('click', () => {
+            resetActionForm();
+            if (actionBuilderModal) {
+                actionBuilderModal.hide();
+            }
+        });
+
+        // Delete Action button
+        document.getElementById('btnDeleteAction').addEventListener('click', () => {
+            const select = document.getElementById('actionSelect');
+            const actionId = select.value;
+            if (!actionId) return;
+            
+            const action = allActions.find(a => a.id === actionId);
+            if (action) {
+                confirmDeleteAction(actionId, action.name);
+            }
+        });
+
+        // Action Launcher and dropdown change handler
+        document.getElementById('actionSelect').addEventListener('change', (e) => {
+            const launchBtn = document.getElementById('btnLaunchAction');
+            const editBtn = document.getElementById('btnEditAction');
+            const deleteBtn = document.getElementById('btnDeleteAction');
+            const hasSelection = !!e.target.value;
+            
+            launchBtn.disabled = !hasSelection;
+            editBtn.disabled = !hasSelection;
+            deleteBtn.disabled = !hasSelection;
+        });
+
+        document.getElementById('btnLaunchAction').addEventListener('click', async () => {
+            const select = document.getElementById('actionSelect');
+            const selectedOption = select.options[select.selectedIndex];
+            
+            if (!selectedOption || !selectedOption.value) return;
+            
+            const actionUrl = selectedOption.dataset.url;
+            const actionName = selectedOption.textContent;
+            
+            try {
+                // Send the URL to the client
+                await connection.invoke('SendUrlToClient', clientName, actionUrl);
+                showConfirmation(`Launched: ${actionName}`);
+                
+                // Optionally reset the select
+                select.selectedIndex = 0;
+                document.getElementById('btnLaunchAction').disabled = true;
+            } catch (error) {
+                console.error('Error launching action:', error);
+                alert('Failed to launch action');
+            }
+        });
+
+        // Action Builder form handlers
+        document.querySelectorAll('input[name="triggerType"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const triggerType = e.target.value;
+                const elementConfig = document.getElementById('elementTriggerConfig');
+                const quickActionSelection = document.getElementById('quickActionSelection');
+                const standardActionSelection = document.getElementById('standardActionSelection');
+                const elementType = document.getElementById('elementType');
+                const elementSelector = document.getElementById('elementSelector');
+                
+                if (triggerType === 'none') {
+                    // Hide element configuration
+                    elementConfig.style.display = 'none';
+                    elementType.required = false;
+                    elementSelector.required = false;
+                    
+                    // Show quick action selection
+                    quickActionSelection.style.display = 'block';
+                    standardActionSelection.style.display = 'none';
+                } else {
+                    // Show element configuration
+                    elementConfig.style.display = 'block';
+                    elementType.required = true;
+                    elementSelector.required = true;
+                    
+                    // Hide quick action selection
+                    quickActionSelection.style.display = 'none';
+                    standardActionSelection.style.display = 'block';
+                }
+            });
+        });
+
+        document.getElementById('actionType').addEventListener('change', (e) => {
+            const urlContainer = document.getElementById('navigateUrlContainer');
+            const urlInput = document.getElementById('navigateUrl');
+            const coordContainer = document.getElementById('clickCoordinatesContainer');
+            const clickX = document.getElementById('actionClickX');
+            const clickY = document.getElementById('actionClickY');
+            
+            if (e.target.value === 'navigate') {
+                urlContainer.style.display = 'block';
+                urlInput.required = true;
+                coordContainer.style.display = 'none';
+                clickX.required = false;
+                clickY.required = false;
+            } else {
+                urlContainer.style.display = 'none';
+                urlInput.required = false;
+                coordContainer.style.display = 'block';
+                clickX.required = true;
+                clickY.required = true;
+            }
+        });
+
+        document.getElementById('actionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveAction();
+        });
+        
+        // Reset form when modal is closed
+        document.getElementById('actionBuilderModal').addEventListener('hidden.bs.modal', () => {
+            resetActionForm();
+        });
+
+        document.getElementById('btnConfirmDeleteAction').addEventListener('click', async () => {
+            if (actionToDelete) {
+                await deleteAction(actionToDelete);
+                deleteActionModal.hide();
+                actionToDelete = null;
+            }
+        });
+
+        async function loadActions() {
+            try {
+                const response = await fetch(`/api/actions/${clientName}`);
+                if (response.ok) {
+                    allActions = await response.json();
+                    displayActions();
+                    populateActionDropdown();
+                }
+            } catch (error) {
+                console.error('Error loading actions:', error);
+            }
+        }
+
+        function populateActionDropdown() {
+            const select = document.getElementById('actionSelect');
+            const launchBtn = document.getElementById('btnLaunchAction');
+            
+            // Clear existing options except first
+            select.innerHTML = '<option value="">Select an action...</option>';
+            
+            // Add active actions
+            const activeActions = allActions.filter(a => a.isActive);
+            activeActions.forEach(action => {
+                const option = document.createElement('option');
+                option.value = action.id;
+                option.textContent = `${action.name} - ${action.targetUrl}`;
+                option.dataset.url = action.targetUrl;
+                select.appendChild(option);
+            });
+            
+            // Enable/disable launch button
+            launchBtn.disabled = activeActions.length === 0;
+        }
+
+        function displayActions() {
+            // This function is no longer needed for modal display
+            // but we keep it for backward compatibility
+            // Actions are now managed through the dropdown and action buttons
+        }
+
+        async function saveAction(closeModal = true) {
+            const clickXValue = document.getElementById('actionClickX').value;
+            const clickYValue = document.getElementById('actionClickY').value;
+            const triggerType = document.querySelector('input[name="triggerType"]:checked').value;
+            
+            // Build the current step
+            const currentStep = {
+                trigger: {
+                    type: triggerType === 'none' ? 'immediate' : 'elementVisible',
+                    elementType: triggerType === 'element' ? document.getElementById('elementType').value : null,
+                    selector: triggerType === 'element' ? document.getElementById('elementSelector').value : null,
+                    timeoutSeconds: triggerType === 'element' ? (parseFloat(document.getElementById('timeoutSeconds').value) || 0) : 0
+                },
+                action: {}
+            };
+            
+            // Handle action based on trigger type
+            if (triggerType === 'none') {
+                const quickAction = document.getElementById('quickActionType').value;
+                if (quickAction === 'fullscreen') {
+                    currentStep.action = {
+                        type: 'script',
+                        script: 'document.documentElement.requestFullscreen()',
+                        delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
+                    };
+                } else if (quickAction === 'none') {
+                    // None option - no action needed, just navigate to the page
+                    currentStep.action = {
+                        type: 'navigate',
+                        url: null,
+                        delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
+                    };
+                }
+            } else {
+                const actionType = document.getElementById('actionType').value;
+                currentStep.action = {
+                    type: actionType,
+                    clickX: actionType === 'click' ? parseInt(clickXValue) : null,
+                    clickY: actionType === 'click' ? parseInt(clickYValue) : null,
+                    url: actionType === 'navigate' ? document.getElementById('navigateUrl').value : null,
+                    delaySeconds: parseFloat(document.getElementById('delaySeconds').value) || 0
+                };
+            }
+            
+            let actionData;
+            
+            if (editingActionId) {
+                // Editing existing action - update the step at currentStepIndex
+                const existingAction = allActions.find(a => a.id === editingActionId);
+                actionData = {
+                    name: document.getElementById('actionName').value,
+                    targetUrl: document.getElementById('actionTargetUrl').value,
+                    description: document.getElementById('actionDescription').value,
+                    isActive: document.getElementById('isActive').checked,
+                    actions: existingAction?.actions || []
+                };
+                
+                // Update or add the step
+                if (currentStepIndex < actionData.actions.length) {
+                    actionData.actions[currentStepIndex] = currentStep;
+                } else {
+                    actionData.actions.push(currentStep);
+                }
+            } else {
+                // Creating new action
+                actionData = {
+                    name: document.getElementById('actionName').value,
+                    targetUrl: document.getElementById('actionTargetUrl').value,
+                    description: document.getElementById('actionDescription').value,
+                    isActive: document.getElementById('isActive').checked,
+                    actions: [currentStep]
+                };
+            }
+
+            console.log('Sending action data:', JSON.stringify(actionData, null, 2));
+
+            try {
+                let response;
+                if (editingActionId) {
+                    response = await fetch(`/api/actions/${clientName}/${editingActionId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionData)
+                    });
+                } else {
+                    response = await fetch(`/api/actions/${clientName}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionData)
+                    });
+                }
+
+                if (response.ok) {
+                    const savedAction = await response.json();
+                    editingActionId = savedAction.id; // Update in case it was a new action
+                    
+                    await loadActions();
+                    await notifyClientOfActions();
+                    populateActionDropdown();
+                    showConfirmation('Action saved successfully!');
+                    
+                    // Update navigation buttons
+                    updateNavigationButtons();
+                    
+                    // Close the modal only if requested
+                    if (closeModal && actionBuilderModal) {
+                        actionBuilderModal.hide();
+                    }
+                } else {
+                    alert('Failed to save action');
+                }
+            } catch (error) {
+                console.error('Error saving action:', error);
+                alert('Failed to save action');
+            }
+        }
+
+        function editAction(actionId, stepIndex = 0) {
+            const action = allActions.find(a => a.id === actionId);
+            if (!action) return;
+
+            console.log('Editing action:', action, 'Step:', stepIndex);
+
+            editingActionId = actionId;
+            currentStepIndex = stepIndex;
+
+            // Set top-level action properties
+            document.getElementById('actionName').value = action.name;
+            document.getElementById('actionTargetUrl').value = action.targetUrl || '';
+            document.getElementById('actionDescription').value = action.description || '';
+            document.getElementById('isActive').checked = action.isActive;
+            
+            // Get the step to edit (or use legacy format)
+            let step;
+            if (action.actions && action.actions.length > 0) {
+                step = action.actions[stepIndex] || action.actions[0];
+            } else if (action.trigger && action.action) {
+                // Legacy format
+                step = {
+                    trigger: action.trigger,
+                    action: action.action
+                };
+            } else {
+                console.error('No action steps found');
+                return;
+            }
+            
+            // Set trigger and action from the step
+            const triggerType = step.trigger.type === 'immediate' ? 'none' : 'element';
+            document.getElementById(triggerType === 'none' ? 'triggerNone' : 'triggerElement').checked = true;
+            document.querySelector(`input[name="triggerType"]:checked`).dispatchEvent(new Event('change'));
+            
+            document.getElementById('timeoutSeconds').value = step.trigger?.timeoutSeconds || 0;
+            document.getElementById('delaySeconds').value = step.action?.delaySeconds || 0;
+            
+            if (triggerType === 'element') {
+                document.getElementById('elementType').value = step.trigger.elementType || 'div';
+                document.getElementById('elementSelector').value = step.trigger.selector || '';
+                document.getElementById('actionType').value = step.action.type;
+                
+                const clickXInput = document.getElementById('actionClickX');
+                const clickYInput = document.getElementById('actionClickY');
+                clickXInput.value = step.action.clickX ?? 100;
+                clickYInput.value = step.action.clickY ?? 100;
+                
+                document.getElementById('navigateUrl').value = step.action.url || '';
+                document.getElementById('actionType').dispatchEvent(new Event('change'));
+            } else {
+                if (step.action.type === 'script' && step.action.script === 'document.documentElement.requestFullscreen()') {
+                    document.getElementById('quickActionType').value = 'fullscreen';
+                } else if (step.action.type === 'navigate' && !step.action.url) {
+                    document.getElementById('quickActionType').value = 'none';
+                }
+            }
+
+            document.getElementById('actionFormTitle').innerHTML = '<i class="bi bi-pencil me-2"></i>Edit Action';
+            document.getElementById('btnSaveText').textContent = 'Save Step';
+            document.getElementById('btnCancelEdit').style.display = 'block';
+            
+            // Update step counter and navigation
+            updateStepCounter();
+            updateNavigationButtons();
+        }
+
+        async function toggleAction(actionId, isActive) {
+            try {
+                const response = await fetch(`/api/actions/${clientName}/${actionId}/toggle`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isActive })
+                });
+
+                if (response.ok) {
+                    await loadActions();
+                    await notifyClientOfActions();
+                    populateActionDropdown();
+                    showConfirmation(`Action ${isActive ? 'activated' : 'deactivated'}`);
+                }
+            } catch (error) {
+                console.error('Error toggling action:', error);
+            }
+        }
+
+        function confirmDeleteAction(actionId, actionName) {
+            if (!deleteActionModal) {
+                deleteActionModal = new bootstrap.Modal(document.getElementById('deleteActionModal'));
+            }
+            actionToDelete = actionId;
+            document.getElementById('deleteActionName').textContent = actionName;
+            deleteActionModal.show();
+        }
+
+        async function deleteAction(actionId) {
+            try {
+                const response = await fetch(`/api/actions/${clientName}/${actionId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadActions();
+                    await notifyClientOfActions();
+                    populateActionDropdown();
+                    showConfirmation('Action deleted successfully');
+                }
+            } catch (error) {
+                console.error('Error deleting action:', error);
+            }
+        }
+
+        function resetActionForm() {
+            document.getElementById('actionForm').reset();
+            document.getElementById('navigateUrlContainer').style.display = 'none';
+            document.getElementById('actionFormTitle').innerHTML = '<i class="bi bi-plus-circle me-2"></i>Create New Action';
+            document.getElementById('btnSaveText').textContent = 'Create Action';
+            document.getElementById('btnCancelEdit').style.display = 'none';
+            editingActionId = null;
+            currentStepIndex = 0;
+            window.chainFromActionId = null;
+            
+            // Unlock target URL field
+            document.getElementById('actionTargetUrl').readOnly = false;
+            document.getElementById('actionTargetUrl').classList.remove('bg-light');
+            
+            // Reset trigger type to element visible (default)
+            document.getElementById('triggerElement').checked = true;
+            document.getElementById('elementTriggerConfig').style.display = 'block';
+            document.getElementById('quickActionSelection').style.display = 'none';
+            document.getElementById('standardActionSelection').style.display = 'block';
+            
+            // Reset timeout
+            document.getElementById('timeoutSeconds').value = 0;
+            
+            // Reset navigation buttons and counter
+            document.getElementById('btnPrevAction').disabled = true;
+            document.getElementById('btnNextAction').disabled = true;
+            document.getElementById('stepCounter').style.display = 'none';
+        }
+        
+        // Update step counter display
+        function updateStepCounter() {
+            const counter = document.getElementById('stepCounter');
+            if (!editingActionId) {
+                counter.style.display = 'none';
+                return;
+            }
+            
+            const action = allActions.find(a => a.id === editingActionId);
+            if (action && action.actions && action.actions.length > 0) {
+                counter.textContent = `(Step ${currentStepIndex + 1} of ${action.actions.length})`;
+                counter.style.display = 'inline';
+            } else {
+                counter.style.display = 'none';
+            }
+        }
+        
+        // Update navigation buttons based on current step
+        function updateNavigationButtons() {
+            if (!editingActionId) {
+                document.getElementById('btnPrevAction').disabled = true;
+                document.getElementById('btnNextAction').disabled = true;
+                return;
+            }
+            
+            const action = allActions.find(a => a.id === editingActionId);
+            if (!action || !action.actions || action.actions.length === 0) {
+                document.getElementById('btnPrevAction').disabled = true;
+                document.getElementById('btnNextAction').disabled = true;
+                return;
+            }
+            
+            // Enable/disable Previous button
+            const btnPrev = document.getElementById('btnPrevAction');
+            btnPrev.disabled = currentStepIndex === 0;
+            
+            // Enable/disable Next button
+            const btnNext = document.getElementById('btnNextAction');
+            btnNext.disabled = currentStepIndex >= action.actions.length - 1;
+        }
+        
+        // Add a new step to the current action
+        async function addStep() {
+            // Validate that we have at least basic info
+            const actionName = document.getElementById('actionName').value;
+            const targetUrl = document.getElementById('actionTargetUrl').value;
+            
+            if (!actionName || !targetUrl) {
+                alert('Please fill in Action Name and Target URL first.');
+                return;
+            }
+            
+            // Save current step first (this will create the action if it's new) - but don't close modal
+            await saveAction(false);
+            
+            // Move to new step (next index)
+            const action = allActions.find(a => a.id === editingActionId);
+            currentStepIndex = action && action.actions ? action.actions.length : 0;
+            
+            // Clear the form for new step (but keep action name/url/description)
+            const name = document.getElementById('actionName').value;
+            const url = document.getElementById('actionTargetUrl').value;
+            const desc = document.getElementById('actionDescription').value;
+            const isActive = document.getElementById('isActive').checked;
+            
+            document.getElementById('actionForm').reset();
+            
+            document.getElementById('actionName').value = name;
+            document.getElementById('actionTargetUrl').value = url;
+            document.getElementById('actionDescription').value = desc;
+            document.getElementById('isActive').checked = isActive;
+            
+            // Reset to defaults
+            document.getElementById('triggerElement').checked = true;
+            document.querySelector('input[name="triggerType"]:checked').dispatchEvent(new Event('change'));
+            document.getElementById('timeoutSeconds').value = 0;
+            document.getElementById('delaySeconds').value = 0;
+            
+            document.getElementById('btnSaveText').textContent = 'Save Step';
+            
+            updateStepCounter();
+            updateNavigationButtons();
+        }
+
+        async function notifyClientOfActions() {
+            if (connection && connection.state === signalR.HubConnectionState.Connected) {
+                try {
+                    await connection.invoke('SendActionsToClient', clientName);
+                    console.log('Notified client of action changes');
+                } catch (error) {
+                    console.error('Error notifying client:', error);
+                }
+            }
+        }
+
         document.getElementById('btnSendClick').addEventListener('click', async () => {
             const x = parseInt(document.getElementById('clickX').value);
             const y = parseInt(document.getElementById('clickY').value);
@@ -319,7 +1160,7 @@
             }
 
             try {
-                await connection.invoke('SimulateMouseClick', sessionCode, x, y);
+                await connection.invoke('SimulateMouseClick', clientName, x, y);
                 mouseClickModal.hide();
                 showConfirmation(`Mouse click sent at (${x}, ${y})`);
             } catch (error) {
@@ -409,7 +1250,7 @@
             }
 
             try {
-                await connection.invoke('SendUrlToClient', sessionCode, url);
+                await connection.invoke('SendUrlToClient', clientName, url);
                 showConfirmation('URL sent successfully!');
             } catch (error) {
                 console.error('Error sending URL:', error);
@@ -425,7 +1266,7 @@
             }
 
             try {
-                await connection.invoke('ExecuteScriptOnClient', sessionCode, script);
+                await connection.invoke('ExecuteScriptOnClient', clientName, script);
                 showConfirmation('Script executed!');
             } catch (error) {
                 console.error('Error executing script:', error);
@@ -446,8 +1287,12 @@
 
             connection.on('ClientConnected', () => {
                 document.getElementById('waitingAlert').classList.add('d-none');
+                document.getElementById('waitingState').classList.add('d-none');
                 document.getElementById('connectedState').classList.remove('d-none');
                 document.getElementById('disconnectedState').classList.add('d-none');
+                
+                // Load actions to populate dropdown
+                loadActions();
             });
 
             connection.on('ClientDisconnected', () => {
@@ -475,19 +1320,27 @@
                 console.log(`Display dimensions received: ${width}x${height}`);
             });
 
+            connection.on('ActionWasTriggered', (actionId, timestamp) => {
+                console.log('Action triggered:', actionId, timestamp);
+                // Reload actions to show updated lastTriggered time
+                if (actionBuilderModal && actionBuilderModal._isShown) {
+                    loadActions();
+                }
+            });
+
             connection.on('ResetServer', () => {
-                console.log('Reset signal received - reloading page');
-                window.location.reload();
+                console.log('Reset signal received - redirecting to admin');
+                window.location.href = '/admin';
             });
 
             try {
                 console.log('Starting SignalR connection...');
                 await connection.start();
                 console.log('SignalR connection started successfully');
-                const success = await connection.invoke('ServerJoinSession', sessionCode);
+                const success = await connection.invoke('ServerJoinSession', clientName);
                 console.log('ServerJoinSession result:', success);
                 if (!success) {
-                    alert('Failed to join session. Invalid code.');
+                    window.location.href = '/admin?error=' + encodeURIComponent('Client does not exist or is not connected');
                 }
             } catch (error) {
                 console.error('Error connecting to hub:', error);

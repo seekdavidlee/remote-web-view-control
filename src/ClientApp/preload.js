@@ -1,12 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    connect: (url, code) => ipcRenderer.invoke('connect', { url, code }),
+    connect: (url) => ipcRenderer.invoke('connect', { url }),
     disconnect: () => ipcRenderer.invoke('disconnect'),
     toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
+    getClientName: () => ipcRenderer.invoke('get-client-name'),
     
     // Event listeners
-    onConnected: (callback) => ipcRenderer.on('connected', (event, code) => callback(code)),
+    onConfigLoaded: (callback) => ipcRenderer.on('config-loaded', (event, config) => callback(config)),
+    onConnected: (callback) => ipcRenderer.on('connected', (event, clientName) => callback(clientName)),
     onConnectionError: (callback) => ipcRenderer.on('connection-error', (event, error) => callback(error)),
     onUrlReceived: (callback) => ipcRenderer.on('url-received', (event, url) => callback(url)),
     onScriptExecuted: (callback) => ipcRenderer.on('script-executed', (event, result) => callback(result)),

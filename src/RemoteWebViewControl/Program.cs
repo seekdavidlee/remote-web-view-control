@@ -1,5 +1,6 @@
 using RemoteWebViewControl.Hubs;
 using RemoteWebViewControl.Services;
+using RemoteWebViewControl.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,7 @@ builder.Services.AddSignalR(options =>
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
 });
 builder.Services.AddSingleton<SessionService>();
+builder.Services.AddSingleton<ActionService>();
 
 var app = builder.Build();
 
@@ -36,16 +38,10 @@ app.UseStaticFiles();
 app.MapHub<RemoteViewHub>("/hub/remoteview");
 
 // API Endpoints
-app.MapPost("/api/session/create", (SessionService sessionService) =>
+app.MapGet("/api/client/exists/{clientName}", (string clientName, SessionService sessionService) =>
 {
-    var code = sessionService.CreateSession();
-    return Results.Ok(new { code });
-});
-
-app.MapGet("/api/session/validate/{code}", (string code, SessionService sessionService) =>
-{
-    var valid = sessionService.ValidateCode(code);
-    return Results.Ok(new { valid });
+    var exists = sessionService.ClientExists(clientName);
+    return Results.Ok(new { exists });
 });
 
 // Admin API Endpoints
@@ -61,10 +57,79 @@ app.MapPost("/api/admin/clear", (SessionService sessionService) =>
     return Results.Ok(new { success = true, message = "All sessions cleared" });
 });
 
+// Action API Endpoints
+app.MapGet("/api/actions/{clientName}", (string clientName, ActionService actionService) =>
+{
+    var actions = actionService.GetActionsForClient(clientName);
+    return Results.Ok(actions);
+});
+
+app.MapGet("/api/actions/{clientName}/active", (string clientName, ActionService actionService) =>
+{
+    var actions = actionService.GetActiveActionsForClient(clientName);
+    return Results.Ok(actions);
+});
+
+app.MapPost("/api/actions/{clientName}", (string clientName, ClientAction action, ActionService actionService) =>
+{
+    action.ClientName = clientName;
+    var created = actionService.CreateAction(action);
+    return Results.Created($"/api/actions/{clientName}/{created.Id}", created);
+});
+
+app.MapPut("/api/actions/{clientName}/{actionId}", (string clientName, string actionId, ClientAction action, ActionService actionService) =>
+{
+    var updated = actionService.UpdateAction(clientName, actionId, action);
+    if (updated)
+    {
+        return Results.Ok(action);
+    }
+    return Results.NotFound(new { error = "Action not found" });
+});
+
+app.MapDelete("/api/actions/{clientName}/{actionId}", (string clientName, string actionId, ActionService actionService) =>
+{
+    var deleted = actionService.DeleteAction(clientName, actionId);
+    if (deleted)
+    {
+        return Results.Ok(new { success = true, message = "Action deleted" });
+    }
+    return Results.NotFound(new { error = "Action not found" });
+});
+
+app.MapPatch("/api/actions/{clientName}/{actionId}/toggle", (string clientName, string actionId, ActionService actionService, HttpRequest request) =>
+{
+    var body = request.ReadFromJsonAsync<Dictionary<string, bool>>().Result;
+    if (body != null && body.TryGetValue("isActive", out var isActive))
+    {
+        var toggled = actionService.ToggleAction(clientName, actionId, isActive);
+        if (toggled)
+        {
+            return Results.Ok(new { success = true, isActive });
+        }
+    }
+    return Results.NotFound(new { error = "Action not found" });
+});
+
 // Route redirects for clean URLs
-app.MapGet("/server", () => Results.Redirect("/server.html"));
+app.MapGet("/server/{clientName}", async (string clientName, SessionService sessionService, HttpContext context) =>
+{
+    // Check if client exists
+    if (!sessionService.ClientExists(clientName))
+    {
+        // Redirect to admin page with error message
+        return Results.Redirect($"/admin?error={Uri.EscapeDataString("Client does not exist or is not connected")}");
+    }
+    
+    // Return the server.html file with correct content type
+    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "server.html");
+    var htmlContent = await File.ReadAllTextAsync(filePath);
+    return Results.Content(htmlContent, "text/html");
+});
+
+app.MapGet("/server", () => Results.Redirect("/admin"));
 app.MapGet("/admin", () => Results.Redirect("/admin.html"));
 app.MapGet("/test/mouse-click", () => Results.Redirect("/test/mouse-click.html"));
-app.MapGet("/", () => Results.Redirect("/server.html"));
+app.MapGet("/", () => Results.Redirect("/admin"));
 
 app.Run();

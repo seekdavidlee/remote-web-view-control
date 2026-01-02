@@ -4,10 +4,11 @@ namespace RemoteWebViewControl.Services;
 
 public class Session
 {
-    public string Code { get; set; } = string.Empty;
+    public string ClientName { get; set; } = string.Empty;
     public string? ServerConnectionId { get; set; }
     public string? ClientConnectionId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime LastActivity { get; set; } = DateTime.UtcNow;
     public bool IsServerConnected => !string.IsNullOrEmpty(ServerConnectionId);
     public bool IsClientConnected => !string.IsNullOrEmpty(ClientConnectionId);
 }
@@ -15,47 +16,45 @@ public class Session
 public class SessionService
 {
     private readonly ConcurrentDictionary<string, Session> _sessions = new();
-    private static readonly Random _random = new();
-    private const string AlphaNumericChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-    public string CreateSession()
+    public Session GetOrCreateSession(string clientName)
     {
-        string code;
-        do
-        {
-            code = GenerateCode();
-        } while (_sessions.ContainsKey(code));
-
-        var session = new Session { Code = code };
-        _sessions[code] = session;
-        return code;
+        var normalizedName = NormalizeClientName(clientName);
+        
+        return _sessions.GetOrAdd(normalizedName, name => new Session 
+        { 
+            ClientName = name 
+        });
     }
 
-    public bool ValidateCode(string code)
+    public bool ClientExists(string clientName)
     {
-        return _sessions.ContainsKey(code.ToUpperInvariant());
+        var normalizedName = NormalizeClientName(clientName);
+        return _sessions.TryGetValue(normalizedName, out var session) && session.IsClientConnected;
     }
 
-    public Session? GetSession(string code)
+    public Session? GetSession(string clientName)
     {
-        _sessions.TryGetValue(code.ToUpperInvariant(), out var session);
+        var normalizedName = NormalizeClientName(clientName);
+        _sessions.TryGetValue(normalizedName, out var session);
         return session;
     }
 
-    public void SetServerConnection(string code, string connectionId)
+    public void SetServerConnection(string clientName, string connectionId)
     {
-        if (_sessions.TryGetValue(code.ToUpperInvariant(), out var session))
+        var normalizedName = NormalizeClientName(clientName);
+        if (_sessions.TryGetValue(normalizedName, out var session))
         {
             session.ServerConnectionId = connectionId;
+            session.LastActivity = DateTime.UtcNow;
         }
     }
 
-    public void SetClientConnection(string code, string connectionId)
+    public void SetClientConnection(string clientName, string connectionId)
     {
-        if (_sessions.TryGetValue(code.ToUpperInvariant(), out var session))
-        {
-            session.ClientConnectionId = connectionId;
-        }
+        var session = GetOrCreateSession(clientName);
+        session.ClientConnectionId = connectionId;
+        session.LastActivity = DateTime.UtcNow;
     }
 
     public void RemoveConnection(string connectionId)
@@ -65,10 +64,12 @@ public class SessionService
             if (session.ServerConnectionId == connectionId)
             {
                 session.ServerConnectionId = null;
+                session.LastActivity = DateTime.UtcNow;
             }
             if (session.ClientConnectionId == connectionId)
             {
                 session.ClientConnectionId = null;
+                session.LastActivity = DateTime.UtcNow;
             }
         }
     }
@@ -81,7 +82,7 @@ public class SessionService
 
     public IEnumerable<Session> GetAllSessions()
     {
-        return _sessions.Values.OrderByDescending(s => s.CreatedAt);
+        return _sessions.Values.OrderByDescending(s => s.LastActivity);
     }
 
     public void ClearAllSessions()
@@ -89,8 +90,8 @@ public class SessionService
         _sessions.Clear();
     }
 
-    private static string GenerateCode()
+    private static string NormalizeClientName(string clientName)
     {
-        return new string([.. Enumerable.Range(0, 5).Select(_ => AlphaNumericChars[_random.Next(AlphaNumericChars.Length)])]);
+        return clientName.ToUpperInvariant().Trim();
     }
 }

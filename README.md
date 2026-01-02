@@ -1,2 +1,3 @@
-# remote-web-view-control
-control browser client that connects to a remote service
+# Remote Web View Control
+
+Control client browser that connects to a remote service.
