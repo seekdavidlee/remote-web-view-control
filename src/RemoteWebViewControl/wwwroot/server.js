@@ -248,16 +248,30 @@ function setupEventListeners() {
         }
     });
 
+    // Export Action button
+    document.getElementById('btnExportAction').addEventListener('click', () => {
+        const select = document.getElementById('actionSelect');
+        const actionId = select.value;
+        if (!actionId) return;
+        
+        const action = allActions.find(a => a.id === actionId);
+        if (action) {
+            exportAction(action);
+        }
+    });
+
     // Action Launcher and dropdown change handler
     document.getElementById('actionSelect').addEventListener('change', (e) => {
         const launchBtn = document.getElementById('btnLaunchAction');
         const editBtn = document.getElementById('btnEditAction');
+        const exportBtn = document.getElementById('btnExportAction');
         const cloneBtn = document.getElementById('btnCloneAction');
         const deleteBtn = document.getElementById('btnDeleteAction');
         const hasSelection = !!e.target.value;
         
         launchBtn.disabled = !hasSelection;
         editBtn.disabled = !hasSelection;
+        if (exportBtn) exportBtn.disabled = !hasSelection;
         if (cloneBtn) cloneBtn.disabled = !hasSelection;
         deleteBtn.disabled = !hasSelection;
     });
@@ -688,6 +702,42 @@ async function toggleAction(actionId, isActive) {
         }
     } catch (error) {
         console.error('Error toggling action:', error);
+    }
+}
+
+function exportAction(action) {
+    try {
+        // Create a clean copy of the action for export (remove id)
+        const exportData = {
+            name: action.name,
+            targetUrl: action.targetUrl,
+            description: action.description,
+            isActive: action.isActive,
+            actions: action.actions
+        };
+        
+        // Convert to JSON with pretty formatting
+        const jsonString = JSON.stringify(exportData, null, 2);
+        
+        // Create a blob and download link
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        // Create a temporary download link
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${action.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showConfirmation(`Exported: ${action.name}`);
+    } catch (error) {
+        console.error('Error exporting action:', error);
+        alert(`Failed to export action: ${error.message}`);
     }
 }
 
