@@ -32,6 +32,7 @@ public class ClientAction
     public string Description { get; set; } = string.Empty;
     public string TargetUrl { get; set; } = string.Empty; // URL where this action applies
     public bool IsActive { get; set; } = true;
+    public int RunTimeInSeconds { get; set; } = 120; // Time to run action before moving to next in playlist
     public List<ActionStep> Actions { get; set; } = []; // Array of sequential action steps
     
     // Deprecated - kept for backward compatibility

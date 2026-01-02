@@ -62,36 +62,38 @@
 
                             <!-- Quick Action Launcher -->
                             <div class="mb-4">
-                                <label for="actionSelect" class="form-label fw-bold">
-                                    <i class="bi bi-play-circle me-1"></i>Launch Saved Action:
-                                </label>
-                                <div class="input-group mb-2">
-                                    <select class="form-select" id="actionSelect">
-                                        <option value="">Select an action...</option>
-                                    </select>
-                                    <button class="btn btn-success" type="button" id="btnLaunchAction" disabled>
-                                        <i class="bi bi-rocket-takeoff me-1"></i>Launch
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label fw-bold mb-0">
+                                        <i class="bi bi-play-circle me-1"></i>Saved Actions:
+                                    </label>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-outline-primary btn-sm" type="button" id="btnNewAction" title="Create new action">
+                                            <i class="bi bi-plus-circle me-1"></i>New
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" type="button" id="btnImportAction" title="Import action from JSON file">
+                                            <i class="bi bi-upload me-1"></i>Import
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Actions Grid -->
+                                <div id="actionsGrid" class="actions-grid mb-3">
+                                    <div class="text-muted text-center p-3">No actions available</div>
+                                </div>
+                                
+                                <!-- Playlist Controls -->
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-success" type="button" id="btnStartPlaylist" disabled>
+                                        <i class="bi bi-play-fill me-1"></i>Start Playlist
                                     </button>
-                                    <button class="btn btn-outline-primary" type="button" id="btnNewAction" title="Create new action">
-                                        <i class="bi bi-plus-circle"></i>
+                                    <button class="btn btn-danger d-none" type="button" id="btnExitPlaylist">
+                                        <i class="bi bi-stop-fill me-1"></i>Exit Playlist
                                     </button>
-                                    <button class="btn btn-outline-primary" type="button" id="btnImportAction" title="Import action from JSON file">
-                                        <i class="bi bi-upload"></i>
-                                    </button>
-                                    <button class="btn btn-outline-primary" type="button" id="btnExportAction" disabled title="Export selected action to JSON file">
-                                        <i class="bi bi-download"></i>
-                                    </button>
-                                    <button class="btn btn-outline-secondary" type="button" id="btnEditAction" disabled title="Edit selected action">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <button class="btn btn-outline-info" type="button" id="btnCloneAction" disabled title="Clone selected action">
-                                        <i class="bi bi-files"></i>
-                                    </button>
-                                    <button class="btn btn-outline-danger" type="button" id="btnDeleteAction" disabled title="Delete selected action">
-                                        <i class="bi bi-trash"></i>
+                                    <button class="btn btn-outline-primary" type="button" id="btnLaunchAction" disabled>
+                                        <i class="bi bi-rocket-takeoff me-1"></i>Launch Selected
                                     </button>
                                 </div>
-                                <small class="text-muted">Sends the action's URL and activates the action on the client</small>
+                                <small class="text-muted d-block mt-2">Select one or more actions to create a playlist or launch individually</small>
                             </div>
 
                             <!-- Script Section -->
@@ -280,6 +282,19 @@
                                             </label>
                                             <textarea class="form-control" id="actionDescription" rows="2" 
                                                       placeholder="What does this action do?"></textarea>
+                                        </div>
+
+                                        <!-- Runtime in Seconds -->
+                                        <div class="mb-3">
+                                            <label for="runTimeInSeconds" class="form-label fw-bold">
+                                                <i class="bi bi-stopwatch me-1"></i>Playlist Runtime
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control" id="runTimeInSeconds" 
+                                                       min="1" max="3600" step="1" value="120">
+                                                <span class="input-group-text">seconds</span>
+                                            </div>
+                                            <small class="text-muted">How long to run this action before moving to the next in playlist mode</small>
                                         </div>
 
                                         <hr class="my-3">

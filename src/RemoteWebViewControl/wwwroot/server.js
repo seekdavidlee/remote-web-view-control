@@ -19,6 +19,13 @@ let displayHeight = null;
 let logsModal = null;
 let logMessages = [];
 
+// Playlist variables
+let isPlaylistMode = false;
+let playlistActions = [];
+let currentPlaylistIndex = 0;
+let playlistTimer = null;
+let playlistTimeRemaining = 0;
+
 // Get client name from URL path
 function getClientNameFromUrl() {
     const pathParts = window.location.pathname.split('/').filter(p => p);
@@ -120,6 +127,7 @@ function setupEventListeners() {
                 document.getElementById('actionTargetUrl').value = importedData.targetUrl;
                 document.getElementById('actionDescription').value = importedData.description || '';
                 document.getElementById('isActive').checked = importedData.isActive !== false;
+                document.getElementById('runTimeInSeconds').value = importedData.runTimeInSeconds || 120;
                 
                 // Load the first step if available
                 if (importedActionsData.length > 0) {
@@ -185,19 +193,6 @@ function setupEventListeners() {
         fileInput.click();
     });
 
-    // Edit Action button
-    document.getElementById('btnEditAction').addEventListener('click', () => {
-        const select = document.getElementById('actionSelect');
-        const actionId = select.value;
-        if (!actionId) return;
-        
-        if (!actionBuilderModal) {
-            actionBuilderModal = new bootstrap.Modal(document.getElementById('actionBuilderModal'));
-        }
-        editAction(actionId, 0); // Start at first step
-        actionBuilderModal.show();
-    });
-
     // Add Step button
     document.getElementById('btnAddStep').addEventListener('click', async () => {
         await addStep();
@@ -236,82 +231,64 @@ function setupEventListeners() {
         }
     });
 
-    // Clone Action button
-    const btnClone = document.getElementById('btnCloneAction');
-    if (btnClone) {
-        btnClone.addEventListener('click', async () => {
-            const select = document.getElementById('actionSelect');
-            const actionId = select.value;
-            if (!actionId) return;
-            
-            const action = allActions.find(a => a.id === actionId);
-            if (action) {
-                await cloneAction(action);
-            }
-        });
-    }
-
-    // Delete Action button
-    document.getElementById('btnDeleteAction').addEventListener('click', () => {
-        const select = document.getElementById('actionSelect');
-        const actionId = select.value;
-        if (!actionId) return;
-        
-        const action = allActions.find(a => a.id === actionId);
-        if (action) {
-            confirmDeleteAction(actionId, action.name);
-        }
-    });
-
-    // Export Action button
-    document.getElementById('btnExportAction').addEventListener('click', () => {
-        const select = document.getElementById('actionSelect');
-        const actionId = select.value;
-        if (!actionId) return;
-        
-        const action = allActions.find(a => a.id === actionId);
-        if (action) {
-            exportAction(action);
-        }
-    });
-
     // Action Launcher and dropdown change handler
-    document.getElementById('actionSelect').addEventListener('change', (e) => {
-        const launchBtn = document.getElementById('btnLaunchAction');
-        const editBtn = document.getElementById('btnEditAction');
-        const exportBtn = document.getElementById('btnExportAction');
-        const cloneBtn = document.getElementById('btnCloneAction');
-        const deleteBtn = document.getElementById('btnDeleteAction');
-        const hasSelection = !!e.target.value;
-        
-        launchBtn.disabled = !hasSelection;
-        editBtn.disabled = !hasSelection;
-        if (exportBtn) exportBtn.disabled = !hasSelection;
-        if (cloneBtn) cloneBtn.disabled = !hasSelection;
-        deleteBtn.disabled = !hasSelection;
-    });
-
     document.getElementById('btnLaunchAction').addEventListener('click', async () => {
-        const select = document.getElementById('actionSelect');
-        const selectedOption = select.options[select.selectedIndex];
+        const checkboxes = document.querySelectorAll('.action-checkbox:checked');
+        if (checkboxes.length === 0) return;
         
-        if (!selectedOption || !selectedOption.value) return;
+        // Get selected actions
+        const selectedActions = Array.from(checkboxes).map(cb => {
+            const actionId = cb.id.replace('action-', '');
+            return allActions.find(a => a.id === actionId);
+        }).filter(a => a);
         
-        const actionUrl = selectedOption.dataset.url;
-        const actionName = selectedOption.textContent;
-        
-        try {
-            // Send the URL to the client
-            await connection.invoke('SendUrlToClient', clientName, actionUrl);
-            showConfirmation(`Launched: ${actionName}`);
-            
-            // Optionally reset the select
-            select.selectedIndex = 0;
-            document.getElementById('btnLaunchAction').disabled = true;
-        } catch (error) {
-            console.error('Error launching action:', error);
-            alert('Failed to launch action');
+        if (selectedActions.length === 1) {
+            // Launch single action immediately
+            const action = selectedActions[0];
+            try {
+                await connection.invoke('SendUrlToClient', clientName, action.targetUrl);
+                showConfirmation(`Launched: ${action.name}`);
+            } catch (error) {
+                console.error('Error launching action:', error);
+                alert('Failed to launch action');
+            }
+        } else {
+            // Multiple actions - show confirmation
+            const actionNames = selectedActions.map(a => a.name).join(', ');
+            if (confirm(`Launch ${selectedActions.length} actions sequentially?\n\n${actionNames}`)) {
+                for (const action of selectedActions) {
+                    try {
+                        await connection.invoke('SendUrlToClient', clientName, action.targetUrl);
+                        showConfirmation(`Launched: ${action.name}`);
+                        // Small delay between launches
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } catch (error) {
+                        console.error('Error launching action:', error);
+                    }
+                }
+            }
         }
+    });
+    
+    // Start Playlist button
+    document.getElementById('btnStartPlaylist').addEventListener('click', () => {
+        const checkboxes = document.querySelectorAll('.action-checkbox:checked');
+        if (checkboxes.length === 0) return;
+        
+        // Get selected actions
+        playlistActions = Array.from(checkboxes).map(cb => {
+            const actionId = cb.id.replace('action-', '');
+            return allActions.find(a => a.id === actionId);
+        }).filter(a => a);
+        
+        if (playlistActions.length > 0) {
+            startPlaylist();
+        }
+    });
+    
+    // Exit Playlist button
+    document.getElementById('btnExitPlaylist').addEventListener('click', () => {
+        exitPlaylist();
     });
 
     // Action Builder form handlers
@@ -486,32 +463,181 @@ async function loadActions() {
         if (response.ok) {
             allActions = await response.json();
             displayActions();
-            populateActionDropdown();
+            renderActionsGrid();
         }
     } catch (error) {
         console.error('Error loading actions:', error);
     }
 }
 
-function populateActionDropdown() {
-    const select = document.getElementById('actionSelect');
-    const launchBtn = document.getElementById('btnLaunchAction');
+function renderActionsGrid() {
+    const grid = document.getElementById('actionsGrid');
+    const btnStartPlaylist = document.getElementById('btnStartPlaylist');
+    const btnLaunchAction = document.getElementById('btnLaunchAction');
     
-    // Clear existing options except first
-    select.innerHTML = '<option value="">Select an action...</option>';
+    if (!allActions || allActions.length === 0) {
+        grid.innerHTML = '<div class="text-muted text-center p-3">No actions available</div>';
+        btnStartPlaylist.disabled = true;
+        btnLaunchAction.disabled = true;
+        return;
+    }
     
-    // Add active actions
-    const activeActions = allActions.filter(a => a.isActive);
-    activeActions.forEach(action => {
-        const option = document.createElement('option');
-        option.value = action.id;
-        option.textContent = `${action.name} - ${action.targetUrl}`;
-        option.dataset.url = action.targetUrl;
-        select.appendChild(option);
+    grid.innerHTML = '';
+    
+    // If in playlist mode, show simple list instead of tiles
+    if (isPlaylistMode) {
+        grid.className = 'playlist-list';
+        
+        playlistActions.forEach((action, index) => {
+            const item = document.createElement('div');
+            item.className = 'playlist-item';
+            if (index === currentPlaylistIndex) {
+                item.classList.add('active');
+            }
+            
+            const number = document.createElement('span');
+            number.className = 'playlist-number';
+            number.textContent = index + 1;
+            
+            const name = document.createElement('span');
+            name.className = 'playlist-name';
+            name.textContent = action.name;
+            
+            const runtime = document.createElement('span');
+            runtime.className = 'playlist-runtime';
+            runtime.textContent = `${action.runTimeInSeconds || 120}s`;
+            
+            item.appendChild(number);
+            item.appendChild(name);
+            item.appendChild(runtime);
+            
+            grid.appendChild(item);
+        });
+        
+        return;
+    }
+    
+    // Normal mode - show grid tiles
+    grid.className = 'actions-grid';
+    
+    allActions.forEach(action => {
+        const tile = document.createElement('div');
+        tile.className = 'action-tile';
+        tile.dataset.actionId = action.id;
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'action-checkbox';
+        checkbox.id = `action-${action.id}`;
+        checkbox.disabled = isPlaylistMode;
+        
+        const label = document.createElement('label');
+        label.className = 'action-tile-content';
+        label.htmlFor = `action-${action.id}`;
+        
+        const name = document.createElement('div');
+        name.className = 'action-name';
+        name.textContent = action.name;
+        
+        const url = document.createElement('div');
+        url.className = 'action-url';
+        url.textContent = action.targetUrl;
+        
+        const runtime = document.createElement('div');
+        runtime.className = 'action-runtime';
+        runtime.innerHTML = `<i class="bi bi-stopwatch"></i> ${action.runTimeInSeconds || 120}s`;
+        
+        const actions = document.createElement('div');
+        actions.className = 'action-buttons';
+        
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-sm btn-outline-secondary';
+        editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+        editBtn.title = 'Edit';
+        editBtn.disabled = isPlaylistMode;
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            editAction(action.id, 0);
+            if (!actionBuilderModal) {
+                actionBuilderModal = new bootstrap.Modal(document.getElementById('actionBuilderModal'));
+            }
+            actionBuilderModal.show();
+        };
+        
+        const exportBtn = document.createElement('button');
+        exportBtn.className = 'btn btn-sm btn-outline-primary';
+        exportBtn.innerHTML = '<i class="bi bi-download"></i>';
+        exportBtn.title = 'Export';
+        exportBtn.disabled = isPlaylistMode;
+        exportBtn.onclick = (e) => {
+            e.stopPropagation();
+            exportAction(action);
+        };
+        
+        const cloneBtn = document.createElement('button');
+        cloneBtn.className = 'btn btn-sm btn-outline-info';
+        cloneBtn.innerHTML = '<i class="bi bi-files"></i>';
+        cloneBtn.title = 'Clone';
+        cloneBtn.disabled = isPlaylistMode;
+        cloneBtn.onclick = async (e) => {
+            e.stopPropagation();
+            await cloneAction(action);
+            if (!actionBuilderModal) {
+                actionBuilderModal = new bootstrap.Modal(document.getElementById('actionBuilderModal'));
+            }
+            actionBuilderModal.show();
+        };
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-sm btn-outline-danger';
+        deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
+        deleteBtn.title = 'Delete';
+        deleteBtn.disabled = isPlaylistMode;
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            confirmDeleteAction(action.id, action.name);
+        };
+        
+        actions.appendChild(editBtn);
+        actions.appendChild(exportBtn);
+        actions.appendChild(cloneBtn);
+        actions.appendChild(deleteBtn);
+        
+        label.appendChild(name);
+        label.appendChild(url);
+        label.appendChild(runtime);
+        
+        tile.appendChild(checkbox);
+        tile.appendChild(label);
+        tile.appendChild(actions);
+        
+        // Handle tile click to toggle checkbox
+        tile.addEventListener('click', (e) => {
+            if (!isPlaylistMode && e.target !== checkbox && !actions.contains(e.target)) {
+                checkbox.checked = !checkbox.checked;
+                updatePlaylistButtons();
+            }
+        });
+        
+        checkbox.addEventListener('change', updatePlaylistButtons);
+        
+        grid.appendChild(tile);
     });
     
-    // Enable/disable launch button
-    launchBtn.disabled = activeActions.length === 0;
+    updatePlaylistButtons();
+}
+
+function updatePlaylistButtons() {
+    const checkboxes = document.querySelectorAll('.action-checkbox');
+    const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    
+    document.getElementById('btnStartPlaylist').disabled = selectedCount === 0 || isPlaylistMode;
+    document.getElementById('btnLaunchAction').disabled = selectedCount === 0 || isPlaylistMode;
+}
+
+function populateActionDropdown() {
+    // This function is deprecated but kept for backward compatibility
+    // Actions are now shown in the grid
 }
 
 function displayActions() {
@@ -574,6 +700,7 @@ async function saveAction(closeModal = true) {
             targetUrl: document.getElementById('actionTargetUrl').value,
             description: document.getElementById('actionDescription').value,
             isActive: document.getElementById('isActive').checked,
+            runTimeInSeconds: parseInt(document.getElementById('runTimeInSeconds').value) || 120,
             actions: existingAction?.actions || []
         };
         
@@ -590,6 +717,7 @@ async function saveAction(closeModal = true) {
             targetUrl: document.getElementById('actionTargetUrl').value,
             description: document.getElementById('actionDescription').value,
             isActive: document.getElementById('isActive').checked,
+            runTimeInSeconds: parseInt(document.getElementById('runTimeInSeconds').value) || 120,
             actions: importedActionsData && importedActionsData.length > 0 ? importedActionsData : [currentStep]
         };
     }
@@ -623,7 +751,7 @@ async function saveAction(closeModal = true) {
             
             await loadActions();
             await notifyClientOfActions();
-            populateActionDropdown();
+            renderActionsGrid();
             showConfirmation('Action saved successfully!');
             
             // Update navigation buttons
@@ -649,6 +777,7 @@ function loadStepIntoForm(stepIndex) {
     let targetUrl = '';
     let description = '';
     let isActive = true;
+    let runTimeInSeconds = 120;
     
     // Get step from editing action or imported data
     if (editingActionId) {
@@ -659,6 +788,7 @@ function loadStepIntoForm(stepIndex) {
             targetUrl = action.targetUrl || '';
             description = action.description || '';
             isActive = action.isActive;
+            runTimeInSeconds = action.runTimeInSeconds || 120;
         }
     } else if (importedActionsData && importedActionsData[stepIndex]) {
         step = importedActionsData[stepIndex];
@@ -667,6 +797,7 @@ function loadStepIntoForm(stepIndex) {
         targetUrl = document.getElementById('actionTargetUrl').value;
         description = document.getElementById('actionDescription').value;
         isActive = document.getElementById('isActive').checked;
+        runTimeInSeconds = parseInt(document.getElementById('runTimeInSeconds').value) || 120;
     }
     
     if (!step) {
@@ -681,6 +812,7 @@ function loadStepIntoForm(stepIndex) {
     document.getElementById('actionTargetUrl').value = targetUrl;
     document.getElementById('actionDescription').value = description;
     document.getElementById('isActive').checked = isActive;
+    document.getElementById('runTimeInSeconds').value = runTimeInSeconds;
     
     // Set trigger and action from the step
     const triggerType = step.trigger?.type === 'immediate' ? 'none' : 'element';
@@ -729,6 +861,7 @@ function editAction(actionId, stepIndex = 0) {
     document.getElementById('actionTargetUrl').value = action.targetUrl || '';
     document.getElementById('actionDescription').value = action.description || '';
     document.getElementById('isActive').checked = action.isActive;
+    document.getElementById('runTimeInSeconds').value = action.runTimeInSeconds || 120;
     
     // Get the step to edit (or use legacy format)
     let step;
@@ -809,6 +942,7 @@ function exportAction(action) {
             targetUrl: action.targetUrl,
             description: action.description,
             isActive: action.isActive,
+            runTimeInSeconds: action.runTimeInSeconds || 120,
             actions: action.actions
         };
         
@@ -847,6 +981,7 @@ async function cloneAction(action) {
         document.getElementById('actionTargetUrl').value = action.targetUrl || '';
         document.getElementById('actionDescription').value = action.description || '';
         document.getElementById('isActive').checked = action.isActive;
+        document.getElementById('runTimeInSeconds').value = action.runTimeInSeconds || 120;
         
         // Get the first step to populate (or use legacy format)
         let step;
@@ -1170,12 +1305,13 @@ async function connectToHub() {
         .build();
 
     connection.on('ClientConnected', () => {
+        console.log('ClientConnected event received - updating UI');
         document.getElementById('waitingAlert').classList.add('d-none');
         document.getElementById('waitingState').classList.add('d-none');
         document.getElementById('connectedState').classList.remove('d-none');
         document.getElementById('disconnectedState').classList.add('d-none');
         
-        // Load actions to populate dropdown
+        // Load actions to populate grid
         loadActions();
     });
 
@@ -1433,5 +1569,132 @@ function showJsonError(message) {
 function hideJsonError() {
     const alert = document.getElementById('jsonErrorAlert');
     alert.classList.add('d-none');
+}
+
+// Playlist Functions
+async function startPlaylist() {
+    if (playlistActions.length === 0) return;
+    
+    isPlaylistMode = true;
+    currentPlaylistIndex = 0;
+    
+    // Update UI
+    document.getElementById('btnStartPlaylist').classList.add('d-none');
+    document.getElementById('btnExitPlaylist').classList.remove('d-none');
+    document.getElementById('btnLaunchAction').disabled = true;
+    document.getElementById('btnNewAction').disabled = true;
+    document.getElementById('btnImportAction').disabled = true;
+    
+    // Disable all action tiles
+    renderActionsGrid();
+    
+    // Add playlist status indicator
+    const grid = document.getElementById('actionsGrid');
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'playlistStatus';
+    statusDiv.className = 'alert alert-info mb-3';
+    statusDiv.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i><strong>Playlist Mode Active</strong><div id="playlistProgress" class="mt-2"></div>';
+    grid.insertAdjacentElement('beforebegin', statusDiv);
+    
+    // Start playing the first action
+    await playNextAction();
+}
+
+async function playNextAction() {
+    if (!isPlaylistMode || currentPlaylistIndex >= playlistActions.length) {
+        exitPlaylist();
+        return;
+    }
+    
+    const action = playlistActions[currentPlaylistIndex];
+    playlistTimeRemaining = action.runTimeInSeconds || 120;
+    
+    // Update the grid to show active item
+    renderActionsGrid();
+    
+    // Update progress display
+    updatePlaylistProgress();
+    
+    try {
+        // Launch the action
+        await connection.invoke('SendUrlToClient', clientName, action.targetUrl);
+        showConfirmation(`Playing: ${action.name} (${currentPlaylistIndex + 1}/${playlistActions.length})`);
+        
+        // Start countdown timer
+        playlistTimer = setInterval(() => {
+            playlistTimeRemaining--;
+            updatePlaylistProgress();
+            
+            if (playlistTimeRemaining <= 0) {
+                clearInterval(playlistTimer);
+                currentPlaylistIndex++;
+                playNextAction();
+            }
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Error playing action:', error);
+        showConfirmation(`Error playing action: ${action.name}`);
+        exitPlaylist();
+    }
+}
+
+function updatePlaylistProgress() {
+    const progressDiv = document.getElementById('playlistProgress');
+    if (!progressDiv) return;
+    
+    const action = playlistActions[currentPlaylistIndex];
+    const totalTime = action.runTimeInSeconds || 120;
+    const percentage = ((totalTime - playlistTimeRemaining) / totalTime) * 100;
+    
+    const minutes = Math.floor(playlistTimeRemaining / 60);
+    const seconds = playlistTimeRemaining % 60;
+    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    progressDiv.innerHTML = `
+        <div class="d-flex justify-content-between mb-1">
+            <span><strong>${action.name}</strong> (${currentPlaylistIndex + 1}/${playlistActions.length})</span>
+            <span>${timeString} remaining</span>
+        </div>
+        <div class="progress">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" 
+                 style="width: ${percentage}%" aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+    `;
+}
+
+function exitPlaylist() {
+    // Clear timer
+    if (playlistTimer) {
+        clearInterval(playlistTimer);
+        playlistTimer = null;
+    }
+    
+    // Reset state
+    isPlaylistMode = false;
+    playlistActions = [];
+    currentPlaylistIndex = 0;
+    playlistTimeRemaining = 0;
+    
+    // Update UI
+    document.getElementById('btnStartPlaylist').classList.remove('d-none');
+    document.getElementById('btnExitPlaylist').classList.add('d-none');
+    document.getElementById('btnNewAction').disabled = false;
+    document.getElementById('btnImportAction').disabled = false;
+    
+    // Remove playlist status
+    const statusDiv = document.getElementById('playlistStatus');
+    if (statusDiv) {
+        statusDiv.remove();
+    }
+    
+    // Uncheck all checkboxes and re-enable tiles
+    const checkboxes = document.querySelectorAll('.action-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+    
+    // Re-render grid
+    renderActionsGrid();
+    
+    showConfirmation('Playlist ended');
 }
 
