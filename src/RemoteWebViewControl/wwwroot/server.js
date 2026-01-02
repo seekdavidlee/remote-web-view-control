@@ -1217,6 +1217,34 @@ async function connectToHub() {
         window.location.href = '/admin';
     });
 
+    // Handle reconnection events
+    connection.onreconnecting((error) => {
+        console.log('SignalR reconnecting...', error);
+        document.getElementById('connectedState').classList.add('d-none');
+        document.getElementById('disconnectedState').classList.remove('d-none');
+    });
+
+    connection.onreconnected(async (connectionId) => {
+        console.log('SignalR reconnected with connection ID:', connectionId);
+        try {
+            // Rejoin the session after reconnection
+            const success = await connection.invoke('ServerJoinSession', clientName);
+            console.log('ServerJoinSession after reconnect result:', success);
+            if (!success) {
+                console.error('Failed to rejoin session after reconnection');
+                window.location.href = '/admin?error=' + encodeURIComponent('Failed to rejoin session');
+            }
+        } catch (error) {
+            console.error('Error rejoining session after reconnect:', error);
+        }
+    });
+
+    connection.onclose((error) => {
+        console.log('SignalR connection closed', error);
+        document.getElementById('connectedState').classList.add('d-none');
+        document.getElementById('disconnectedState').classList.remove('d-none');
+    });
+
     try {
         console.log('Starting SignalR connection...');
         await connection.start();
