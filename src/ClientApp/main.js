@@ -429,8 +429,9 @@ async function connectToServer(url) {
 
         // Handle reset signal from admin
         connection.on('ResetClient', async () => {
-            console.log('Reset signal received from admin');
-            await resetToInitialState();
+            console.log('Reset signal received from admin - exiting application');
+            isDisconnecting = true; // Allow windows to close
+            app.quit();
         });
 
         connection.onreconnecting(() => {
