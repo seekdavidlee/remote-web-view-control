@@ -378,11 +378,17 @@ async function connectToServer(url) {
             }
         });
 
-        // Handle server disconnect - fully disconnect client
+        // Handle server disconnect - just notify UI, don't disconnect client
         connection.on('ServerDisconnected', async () => {
-            console.log('Server disconnected - resetting client');
+            console.log('Server page disconnected (user may have navigated away)');
             mainWindow.webContents.send('server-disconnected');
-            await resetToInitialState();
+            
+            // Reset display window to waiting screen
+            if (displayWindow && !displayWindow.isDestroyed()) {
+                displayWindow.loadFile('waiting.html');
+            }
+            
+            // Client stays connected to SignalR, waiting for server to reconnect
         });
 
         // Handle reset signal from admin
