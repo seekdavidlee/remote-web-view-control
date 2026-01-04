@@ -374,6 +374,15 @@ async function connectToServer(url) {
             }
         });
 
+        // Handle reset to waiting state
+        connection.on('ResetToWaiting', () => {
+            console.log('Received reset to waiting command');
+            if (displayWindow && !displayWindow.isDestroyed()) {
+                displayWindow.loadFile('waiting.html');
+                console.log('Display window reset to waiting state');
+            }
+        });
+
         // Handle keyboard simulation from action executor
         ipcMain.on('simulate-keypress', (event, key) => {
             console.log(`Simulating key press: ${key}`);

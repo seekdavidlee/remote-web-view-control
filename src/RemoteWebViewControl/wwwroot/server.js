@@ -1445,6 +1445,13 @@ async function startPlaylist() {
 
 async function playNextAction() {
     if (!isPlaylistMode || currentPlaylistIndex >= playlistActions.length) {
+        // Playlist has ended - reset client to waiting state
+        try {
+            await connection.invoke('ResetClientToWaiting', clientName);
+            console.log('Client reset to waiting state after playlist ended');
+        } catch (error) {
+            console.error('Error resetting client to waiting:', error);
+        }
         exitPlaylist();
         return;
     }

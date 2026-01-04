@@ -135,6 +135,19 @@ public class RemoteViewHub(SessionService sessionService, ActionService actionSe
         }
     }
 
+    public async Task ResetClientToWaiting(string clientName)
+    {
+        var session = sessionService.GetSession(clientName);
+        if (session == null || string.IsNullOrEmpty(session.ClientConnectionId))
+        {
+            logger.LogWarning("Cannot reset client - no client connected for: {ClientName}", clientName);
+            return;
+        }
+
+        await Clients.Client(session.ClientConnectionId).SendAsync("ResetToWaiting");
+        logger.LogInformation("Reset command sent to client {ClientName}", clientName);
+    }
+
     public async Task ClearAllSessions()
     {
         var allSessions = sessionService.GetAllSessions().ToList();
