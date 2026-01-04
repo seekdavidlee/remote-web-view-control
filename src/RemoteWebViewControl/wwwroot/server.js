@@ -10,11 +10,6 @@ let actionBuilderModal = null;
 let deleteActionModal = null;
 let actionToDelete = null;
 
-// Mouse click simulation
-let mouseClickModal = null;
-let displayWidth = null;
-let displayHeight = null;
-
 // Logs functionality
 let logsModal = null;
 let logMessages = [];
@@ -54,32 +49,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function setupEventListeners() {
-    document.getElementById('btnSendUrl').addEventListener('click', sendUrl);
-    document.getElementById('btnExecuteScript').addEventListener('click', executeScript);
-
-    document.getElementById('urlInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendUrl();
-    });
-
-    // Quick script buttons
-    document.querySelectorAll('.quick-script').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const script = btn.dataset.script;
-            try {
-                await connection.invoke('ExecuteScriptOnClient', clientName, script);
-                showConfirmation('Script executed!');
-            } catch (error) {
-                console.error('Error executing script:', error);
-                alert('Failed to execute script.');
-            }
-        });
-    });
-
-    document.getElementById('btnSimulateClick').addEventListener('click', () => {
-        if (!mouseClickModal) {
-            mouseClickModal = new bootstrap.Modal(document.getElementById('mouseClickModal'));
+    // View Logs button
+    document.getElementById('btnViewLogs').addEventListener('click', () => {
+        if (!logsModal) {
+            logsModal = new bootstrap.Modal(document.getElementById('logsModal'));
         }
-        mouseClickModal.show();
+        logsModal.show();
     });
 
     // New Action button
@@ -231,45 +206,6 @@ function setupEventListeners() {
         }
     });
 
-    // Action Launcher and dropdown change handler
-    document.getElementById('btnLaunchAction').addEventListener('click', async () => {
-        const checkboxes = document.querySelectorAll('.action-checkbox:checked');
-        if (checkboxes.length === 0) return;
-        
-        // Get selected actions
-        const selectedActions = Array.from(checkboxes).map(cb => {
-            const actionId = cb.id.replace('action-', '');
-            return allActions.find(a => a.id === actionId);
-        }).filter(a => a);
-        
-        if (selectedActions.length === 1) {
-            // Launch single action immediately
-            const action = selectedActions[0];
-            try {
-                await connection.invoke('SendUrlToClient', clientName, action.targetUrl);
-                showConfirmation(`Launched: ${action.name}`);
-            } catch (error) {
-                console.error('Error launching action:', error);
-                alert('Failed to launch action');
-            }
-        } else {
-            // Multiple actions - show confirmation
-            const actionNames = selectedActions.map(a => a.name).join(', ');
-            if (confirm(`Launch ${selectedActions.length} actions sequentially?\n\n${actionNames}`)) {
-                for (const action of selectedActions) {
-                    try {
-                        await connection.invoke('SendUrlToClient', clientName, action.targetUrl);
-                        showConfirmation(`Launched: ${action.name}`);
-                        // Small delay between launches
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    } catch (error) {
-                        console.error('Error launching action:', error);
-                    }
-                }
-            }
-        }
-    });
-    
     // Start Playlist button
     document.getElementById('btnStartPlaylist').addEventListener('click', () => {
         const checkboxes = document.querySelectorAll('.action-checkbox:checked');
@@ -363,47 +299,6 @@ function setupEventListeners() {
         }
     });
 
-    document.getElementById('btnSendClick').addEventListener('click', async () => {
-        const x = parseInt(document.getElementById('clickX').value);
-        const y = parseInt(document.getElementById('clickY').value);
-        
-        if (isNaN(x) || isNaN(y) || x < 0 || y < 0) {
-            alert('Please enter valid coordinates (positive numbers)');
-            return;
-        }
-
-        // Validate against display dimensions if available
-        if (displayWidth !== null && displayHeight !== null) {
-            if (x >= displayWidth || y >= displayHeight) {
-                alert(`Coordinates out of bounds!\nMax X: ${displayWidth - 1}, Max Y: ${displayHeight - 1}`);
-                return;
-            }
-        }
-
-        try {
-            await connection.invoke('SimulateMouseClick', clientName, x, y);
-            mouseClickModal.hide();
-            showConfirmation(`Mouse click sent at (${x}, ${y})`);
-        } catch (error) {
-            console.error('Error sending mouse click:', error);
-            alert('Failed to send mouse click.');
-        }
-    });
-
-    // Allow Enter key to submit in modal
-    document.getElementById('mouseClickModal').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            document.getElementById('btnSendClick').click();
-        }
-    });
-
-    document.getElementById('btnViewLogs').addEventListener('click', () => {
-        if (!logsModal) {
-            logsModal = new bootstrap.Modal(document.getElementById('logsModal'));
-        }
-        logsModal.show();
-    });
-
     document.getElementById('btnClearLogs').addEventListener('click', () => {
         logMessages = [];
         document.getElementById('logsContainer').innerHTML = '<div class="text-muted text-center">No logs yet...</div>';
@@ -471,12 +366,10 @@ async function loadActions() {
 function renderActionsGrid() {
     const grid = document.getElementById('actionsGrid');
     const btnStartPlaylist = document.getElementById('btnStartPlaylist');
-    const btnLaunchAction = document.getElementById('btnLaunchAction');
     
     if (!allActions || allActions.length === 0) {
         grid.innerHTML = '<div class="text-muted text-center p-3">No actions available</div>';
         btnStartPlaylist.disabled = true;
-        btnLaunchAction.disabled = true;
         return;
     }
     
@@ -630,7 +523,6 @@ function updatePlaylistButtons() {
     const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
     
     document.getElementById('btnStartPlaylist').disabled = selectedCount === 0 || isPlaylistMode;
-    document.getElementById('btnLaunchAction').disabled = selectedCount === 0 || isPlaylistMode;
 }
 
 function populateActionDropdown() {
@@ -1259,38 +1151,6 @@ function showConfirmation(message) {
     setTimeout(() => confirmation.classList.add('d-none'), 3000);
 }
 
-async function sendUrl() {
-    const url = document.getElementById('urlInput').value.trim();
-    if (!url) {
-        alert('Please enter a URL');
-        return;
-    }
-
-    try {
-        await connection.invoke('SendUrlToClient', clientName, url);
-        showConfirmation('URL sent successfully!');
-    } catch (error) {
-        console.error('Error sending URL:', error);
-        alert('Failed to send URL. Please try again.');
-    }
-}
-
-async function executeScript() {
-    const script = document.getElementById('scriptInput').value.trim();
-    if (!script) {
-        alert('Please enter a script');
-        return;
-    }
-
-    try {
-        await connection.invoke('ExecuteScriptOnClient', clientName, script);
-        showConfirmation('Script executed!');
-    } catch (error) {
-        console.error('Error executing script:', error);
-        alert('Failed to execute script. Please try again.');
-    }
-}
-
 async function connectToHub() {
     connection = new signalR.HubConnectionBuilder()
         .withUrl('/hub/remoteview', {
@@ -1320,20 +1180,6 @@ async function connectToHub() {
 
     connection.on('ReceiveLogMessage', (level, message, timestamp) => {
         addLogMessage(level, message, timestamp);
-    });
-
-    connection.on('ReceiveDisplayDimensions', (width, height) => {
-        displayWidth = width;
-        displayHeight = height;
-        
-        // Update modal display
-        document.getElementById('displayWidth').textContent = width;
-        document.getElementById('displayHeight').textContent = height;
-        document.getElementById('dimensionsInfo').style.display = 'block';
-        
-        // Update input max attributes
-        document.getElementById('clickX').setAttribute('max', width - 1);
-        document.getElementById('clickY').setAttribute('max', height - 1);
         
         console.log(`Display dimensions received: ${width}x${height}`);
     });
@@ -1579,7 +1425,6 @@ async function startPlaylist() {
     // Update UI
     document.getElementById('btnStartPlaylist').classList.add('d-none');
     document.getElementById('btnExitPlaylist').classList.remove('d-none');
-    document.getElementById('btnLaunchAction').disabled = true;
     document.getElementById('btnNewAction').disabled = true;
     document.getElementById('btnImportAction').disabled = true;
     
